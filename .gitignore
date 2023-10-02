@@ -44,18 +44,18 @@ tests/.ducktape
 tests/venv
 .cache
 
-docs/generated/
+#docs/generated/
 
 .release-settings.json
 
 kafkatest.egg-info/
 systest/
 *.swp
-clients/src/generated
-clients/src/generated-test
-jmh-benchmarks/generated
-jmh-benchmarks/src/main/generated
-streams/src/generated
-raft/src/generated
-core/src/generated
+#clients/src/generated
+#clients/src/generated-test
+#jmh-benchmarks/generated
+#jmh-benchmarks/src/main/generated
+#streams/src/generated
+#raft/src/generated
+#core/src/generated
 metadata/
