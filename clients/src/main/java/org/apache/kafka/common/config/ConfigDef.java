@@ -37,6 +37,7 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
+ * 配置定义，可以控制期望的类型，做验证。
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
  * the name, the type, the default value, the documentation, the group information, the order in the group,
  * the width of the configuration value and the name suitable for display in the UI.

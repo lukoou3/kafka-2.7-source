@@ -38,6 +38,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
+ * Kafka集群中节点、主题和分区的内部可变缓存。这将保持最新的群集实例，该实例已针对读取访问进行了优化。
  * An internal mutable cache of nodes, topics, and partitions in the Kafka cluster. This keeps an up-to-date Cluster
  * instance which is optimized for read access.
  */
