@@ -227,6 +227,7 @@ public final class RecordAccumulator {
                     throw new KafkaException("Producer closed while send in progress");
 
                 // 首次添加肯定失败返回null，dq队列是空的。虽然申请了buffer但还没用buffer构造批次
+                // 这里为啥又判断一次，因为多线程，其他线程可能已经申请buffer构造批次。在finally中会释放上面申请的buffer
                 RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq, nowMs);
                 if (appendResult != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
@@ -244,11 +245,13 @@ public final class RecordAccumulator {
                 dq.addLast(batch);
                 incomplete.add(batch);
 
+                // 不要在finally中释放buffer，它已经被使用了
                 // Don't deallocate this buffer in the finally block as it's being used in the record batch
                 buffer = null;
                 return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, false);
             }
         } finally {
+            // 没用被使用，释放
             if (buffer != null)
                 free.deallocate(buffer);
             appendsInProgress.decrementAndGet();
