@@ -323,6 +323,7 @@ public class Sender implements Runnable {
         }
 
         long currentTimeMs = time.milliseconds();
+        // 核心逻辑，发送生产数据
         long pollTimeout = sendProducerData(currentTimeMs);
         // 核心逻辑，拉取元数据
         client.poll(pollTimeout, currentTimeMs);
@@ -330,9 +331,11 @@ public class Sender implements Runnable {
 
     private long sendProducerData(long now) {
         Cluster cluster = metadata.fetch();
+        // 获取要发送数据的分区
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
+        // 有分区的leader不知道是谁，需要更新元数据
         // if there are any partitions whose leaders are not known yet, force metadata update
         if (!result.unknownLeaderTopics.isEmpty()) {
             // The set of topics with unknown leader contains topics with leader election pending as well as
@@ -351,12 +354,17 @@ public class Sender implements Runnable {
         long notReadyTimeout = Long.MAX_VALUE;
         while (iter.hasNext()) {
             Node node = iter.next();
+            // 网络没有建立好
             if (!this.client.ready(node, now)) {
                 iter.remove();
                 notReadyTimeout = Math.min(notReadyTimeout, this.client.pollDelayMs(node, now));
             }
         }
 
+        /**
+         * 有可能要发送的partition有多个，可能有些partition的leader是同一个broker，同一个broker分为一组
+         * p0: b0, p1: b0, p2: b1, p3: b1 => b0 -> (p0, p1), b1 -> (p2, p3)
+         */
         // create produce requests
         Map<Integer, List<ProducerBatch>> batches = this.accumulator.drain(cluster, result.readyNodes, this.maxRequestSize, now);
         addToInflightBatches(batches);
@@ -370,7 +378,7 @@ public class Sender implements Runnable {
 
         accumulator.resetNextBatchExpiryTime();
         List<ProducerBatch> expiredInflightBatches = getExpiredInflightBatches(now);
-        List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(now);
+        List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(now); // 超时Batches
         expiredBatches.addAll(expiredInflightBatches);
 
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
@@ -405,6 +413,7 @@ public class Sender implements Runnable {
             // otherwise the select time will be the time difference between now and the metadata expiry time;
             pollTimeout = 0;
         }
+        // 发送这些broker的生产数据请求
         sendProduceRequests(batches, now);
         return pollTimeout;
     }
@@ -714,6 +723,7 @@ public class Sender implements Runnable {
      */
     private void sendProduceRequests(Map<Integer, List<ProducerBatch>> collated, long now) {
         for (Map.Entry<Integer, List<ProducerBatch>> entry : collated.entrySet())
+            // 发送这个broker的生产数据请求
             sendProduceRequest(now, entry.getKey(), acks, requestTimeoutMs, entry.getValue());
     }
 
