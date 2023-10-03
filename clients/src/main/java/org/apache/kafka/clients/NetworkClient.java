@@ -558,6 +558,7 @@ public class NetworkClient implements KafkaClient {
             return responses;
         }
 
+        // 发送元数据请求
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
             this.selector.poll(Utils.min(timeout, metadataTimeout, defaultRequestTimeoutMs));
@@ -868,6 +869,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * 处理相应
      * Handle any completed receives and update the response list with the responses received.
      *
      * @param responses The list of responses to update
@@ -889,6 +891,7 @@ public class NetworkClient implements KafkaClient {
 
             // If the received response includes a throttle delay, throttle the connection.
             maybeThrottle(response, req.header.apiVersion(), req.destination, now);
+            // 处理元数据响应
             if (req.isInternalRequest && response instanceof MetadataResponse)
                 metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) response);
             else if (req.isInternalRequest && response instanceof ApiVersionsResponse)
@@ -1124,6 +1127,7 @@ public class NetworkClient implements KafkaClient {
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now);
             } else {
+                // 更新群集元数据
                 this.metadata.update(inProgress.requestVersion, response, inProgress.isPartialUpdate, now);
             }
 
@@ -1148,15 +1152,18 @@ public class NetworkClient implements KafkaClient {
         }
 
         /**
+         * 添加一个元数据请求到sends集合
          * Add a metadata request to the list of sends if we can make one
          */
         private long maybeUpdate(long now, Node node) {
             String nodeConnectionId = node.idString();
 
+            // 判断网络连接是否建立好
             if (canSendRequest(nodeConnectionId, now)) {
                 Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion(now);
                 MetadataRequest.Builder metadataRequest = requestAndVersion.requestBuilder;
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node);
+                // 发送元数据请求
                 sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
                 inProgress = new InProgressData(requestAndVersion.requestVersion, requestAndVersion.isPartialUpdate);
                 return defaultRequestTimeoutMs;

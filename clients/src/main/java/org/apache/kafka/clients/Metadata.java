@@ -243,6 +243,7 @@ public class Metadata implements Closeable {
     }
 
     /**
+     * 更新群集元数据。如果启用了主题过期，则会根据需要为主题设置过期时间，并从元数据中删除过期的主题。
      * Updates the cluster metadata. If topic expiry is enabled, expiry time
      * is set for topics if required and expired topics are removed from the metadata.
      *

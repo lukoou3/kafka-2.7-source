@@ -44,6 +44,7 @@ public class SystemTime implements Time {
     @Override
     public void waitObject(Object obj, Supplier<Boolean> condition, long deadlineMs) throws InterruptedException {
         synchronized (obj) {
+            // condition 返回true或者超时
             while (true) {
                 if (condition.get())
                     return;
@@ -52,6 +53,7 @@ public class SystemTime implements Time {
                 if (currentTimeMs >= deadlineMs)
                     throw new TimeoutException("Condition not satisfied before deadline");
 
+                // 等待，可以被唤醒，多线程的内容
                 obj.wait(deadlineMs - currentTimeMs);
             }
         }
