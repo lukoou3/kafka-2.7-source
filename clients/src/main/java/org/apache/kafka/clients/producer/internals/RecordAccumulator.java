@@ -192,11 +192,13 @@ public final class RecordAccumulator {
         ByteBuffer buffer = null;
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
+            // 根据分区找到应该插入到哪个队列
             // check if we have an in-progress batch
             Deque<ProducerBatch> dq = getOrCreateDeque(tp);
             synchronized (dq) {
                 if (closed)
                     throw new KafkaException("Producer closed while send in progress");
+                // 首次添加肯定失败返回null，dq队列是空的
                 RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq, nowMs);
                 if (appendResult != null)
                     return appendResult;
@@ -209,8 +211,12 @@ public final class RecordAccumulator {
             }
 
             byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
+            // 计算批次的大小 = max(batchSize, 此条消息的大小)。默认batchSize = 16k
+            // 如果我们的生产的消息都是大于16k，那消息就是一条一条发出去的，那这样批次这个设计就没意义了
+            // 实际情况根据实际日志的大小设置batchSize
             int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", size, tp.topic(), tp.partition(), maxTimeToBlock);
+            // 根据批次大小申请内存
             buffer = free.allocate(size, maxTimeToBlock);
 
             // Update the current time in case the buffer allocation blocked above.
@@ -220,17 +226,21 @@ public final class RecordAccumulator {
                 if (closed)
                     throw new KafkaException("Producer closed while send in progress");
 
+                // 首次添加肯定失败返回null，dq队列是空的。虽然申请了buffer但还没用buffer构造批次
                 RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq, nowMs);
                 if (appendResult != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
                     return appendResult;
                 }
 
+                // buffer构造批次
                 MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
                 ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, nowMs);
+                // 往批次里写数据
                 FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                         callback, nowMs));
 
+                // 批次放入dq队尾
                 dq.addLast(batch);
                 incomplete.add(batch);
 
@@ -648,10 +658,12 @@ public final class RecordAccumulator {
      * Get the deque for the given topic-partition, creating it if necessary.
      */
     private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
+        // 存在就返回，不存在新建添加
         Deque<ProducerBatch> d = this.batches.get(tp);
         if (d != null)
             return d;
         d = new ArrayDeque<>();
+        // 多线程访问，batches是ConcurrentMap
         Deque<ProducerBatch> previous = this.batches.putIfAbsent(tp, d);
         if (previous == null)
             return d;
