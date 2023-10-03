@@ -58,6 +58,13 @@ import scala.collection.mutable.{ArrayBuffer, Buffer}
 import scala.util.control.ControlThrowable
 
 /**
+ * 总体来说SocketServer仅仅负责以下三个方面：
+ *    1）建立Socket，保持和客户端的通信；
+ *    2）转发客户端的Request；
+ *    3）返回Response给客户端。
+ *    最后通过RequestChannel与其他模块解耦。
+ *
+ * 下面就是这个类的解释, 感觉还是能看懂的
  * Handles new connections, requests and responses to and from broker.
  * Kafka supports two types of request planes :
  *  - data-plane :
@@ -121,7 +128,18 @@ class SocketServer(val config: KafkaConfig,
   def startup(startProcessingRequests: Boolean = true): Unit = {
     this.synchronized {
       connectionQuotas = new ConnectionQuotas(config, time, metrics)
+      // ControlPlane的Acceptor
       createControlPlaneAcceptorAndProcessor(config.controlPlaneListener)
+      /**
+       * 创建一个Acceptor多个Processors
+       *
+       * 创建Processor线程, N=num.network.threads, 默认为3
+       * server.properties:
+       *    # The number of threads that the server uses for receiving requests from the network and sending responses to the network
+       *    num.network.threads=3
+       *
+       * dataPlaneListeners: If none of those are defined, we default to PLAINTEXT://:9092
+       */
       createDataPlaneAcceptorsAndProcessors(config.numNetworkThreads, config.dataPlaneListeners)
       if (startProcessingRequests) {
         this.startProcessingRequests()
@@ -284,6 +302,7 @@ class SocketServer(val config: KafkaConfig,
     val listenerName = endpoint.listenerName
     val securityProtocol = endpoint.securityProtocol
     val listenerProcessors = new ArrayBuffer[Processor]()
+    // 创建3个Processor
     for (_ <- 0 until newProcessorsPerListener) {
       val processor = newProcessor(nextProcessorId, dataPlaneRequestChannel, connectionQuotas, listenerName, securityProtocol, memoryPool)
       listenerProcessors += processor
@@ -291,6 +310,7 @@ class SocketServer(val config: KafkaConfig,
       nextProcessorId += 1
     }
     listenerProcessors.foreach(p => dataPlaneProcessors.put(p.id, p))
+    // 3个Processor绑定到acceptor
     acceptor.addProcessors(listenerProcessors, DataPlaneThreadPrefix)
   }
 
@@ -537,7 +557,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
 
   private val nioSelector = NSelector.open()
   val serverChannel = openServerSocket(endPoint.host, endPoint.port)
-  private val processors = new ArrayBuffer[Processor]()
+  private val processors = new ArrayBuffer[Processor]() // 默认3个Processor线程
   private val processorsStarted = new AtomicBoolean
   private val blockedPercentMeter = newMeter(s"${metricPrefix}AcceptorBlockedPercent",
     "blocked time", TimeUnit.NANOSECONDS, Map(ListenerMetricTag -> endPoint.listenerName.value))
@@ -590,12 +610,21 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
 
   /**
    * Accept loop that checks for new connection attempts
+   *
+   * 主要步骤:
+   *    1）开启Socket服务。
+   *    2）注册Accept事件。
+   *    3）监听此ServerChannel上的ACCEPT事件，当其发生时，将其以轮询（Round Robin）的方式把对应的SocketChannel转交给Processor处理线程。
+   *
+   * 注意: OP_ACCEPT为NIO中的事件，当此事件发生时，表示服务器监听到了客户连接，服务器可以接收这个连接了。
    */
   def run(): Unit = {
+    // 注册Accept事件
     serverChannel.register(nioSelector, SelectionKey.OP_ACCEPT)
     startupComplete()
     try {
       var currentProcessorIndex = 0
+      // 监听Accept事件
       while (isRunning) {
         try {
           val ready = nioSelector.select(500)
@@ -607,6 +636,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
                 val key = iter.next
                 iter.remove()
 
+                // 有新的连接
                 if (key.isAcceptable) {
                   accept(key).foreach { socketChannel =>
                     // Assign the channel to the next processor (using round-robin) to which the
@@ -617,13 +647,16 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
                     do {
                       retriesLeft -= 1
                       processor = synchronized {
+                        // 轮训方式分配processor
                         // adjust the index (if necessary) and retrieve the processor atomically for
                         // correct behaviour in case the number of processors is reduced dynamically
                         currentProcessorIndex = currentProcessorIndex % processors.length
                         processors(currentProcessorIndex)
                       }
                       currentProcessorIndex += 1
-                    } while (!assignNewConnection(socketChannel, processor, retriesLeft == 0))
+                    }
+                    // 把此socketChannel交给processor处理
+                    while (!assignNewConnection(socketChannel, processor, retriesLeft == 0))
                   }
                 } else
                   throw new IllegalStateException("Unrecognized key state for acceptor thread.")
@@ -723,13 +756,29 @@ private[kafka] object Processor {
 }
 
 /**
+ * 这个类和RequestChannel就只管转发和返回Request和Response, 具体处理Request的是 [[kafka.server.KafkaRequestHandler]]
+ *
+ * newConnections保存了由Acceptor线程转移过来的SocketChannel对象，主要步骤如下：
+ *    1）当有新的SocketChannel对象进来的时候，注册其上的OP_READ事件以便接收客户端的请求。
+ *    2）从Processor中的响应队列获取对应客户端请求的响应，然后产生OP_WRITE事件。
+ *    3）监听selector上的事件。如果是读事件，说明有新的request到来，需要转移给RequestChannel的请求队列；
+ *      如果是写事件，说明之前的request已经处理完毕，需要从Processor的响应队列获取响应并发送回客户端；
+ *      如果是关闭事件，说明客户端已经关闭了该Socket连接，此时服务端也应该释放相应资源。
+ *
+ * Processor和RequestChannel本质上就是为了解耦SocketServer和KafkaApis两个模块，内部包含Request的阻塞队列和Response的阻塞队列
+ * Processor和RequestChannel包含了1个Request的阻塞队列和numProcessors个Response的阻塞队列，其中numProcessors=num.network.threads，默认为3个。
+ * Processor线程通过监听OP_READ事件将Request转移到RequestChannel内部的Request阻塞队列，
+ * KafkaRequestHandlerPool内部的KafkaRequestHandler线程从RequestChannel内部的Request阻塞队列取出Request进行处理，
+ * 然后将对应的Response放回至Response阻塞队列，并触发Processor线程监听的OP_WRITE事件，
+ * 最后由Processor线程将Response发送至客户端。
+ *
  * Thread that processes all requests from a single connection. There are N of these running in parallel
  * each of which has its own selector
  */
 private[kafka] class Processor(val id: Int,
                                time: Time,
                                maxRequestSize: Int,
-                               requestChannel: RequestChannel,
+                               requestChannel: RequestChannel, // kafka自己的类, 里面有个属性: requestQueue
                                connectionQuotas: ConnectionQuotas,
                                connectionsMaxIdleMs: Long,
                                failedAuthenticationDelayMs: Int,
@@ -759,6 +808,7 @@ private[kafka] class Processor(val id: Int,
 
   private val newConnections = new ArrayBlockingQueue[SocketChannel](connectionQueueSize)
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
+  // requestQueue在RequestChannel中, responseQueue在Processor中
   private val responseQueue = new LinkedBlockingDeque[RequestChannel.Response]()
 
   private[kafka] val metricTags = mutable.LinkedHashMap(
@@ -819,8 +869,10 @@ private[kafka] class Processor(val id: Int,
     try {
       while (isRunning) {
         try {
+          // 针对新的连接，注册其上的OP_READ事件
           // setup any new connections that have been queued up
           configureNewConnections()
+          // 从RequestChannel获取响应产生OP_WRITE事件
           // register any new responses for writing
           processNewResponses()
           poll()
@@ -1062,6 +1114,7 @@ private[kafka] class Processor(val id: Int,
   }
 
   /**
+   * 将新连接排队以进行读取, newConnections中放的是新的连接
    * Queue up a new connection for reading
    */
   def accept(socketChannel: SocketChannel,

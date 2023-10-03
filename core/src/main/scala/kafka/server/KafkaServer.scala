@@ -120,6 +120,20 @@ object KafkaServer {
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
+ *
+ * 表示单个Kafka broker的生命周期, 处理启动和关闭单个Kafka节点所需的所有功能
+ *
+ * SocketServer：
+ *    首先开启1个Acceptor线程用于监听默认端口号为9092上的Socket链接，
+ *    然后当有新的Socket链接成功建立时会将对应的SocketChannel以轮询的方式转发给N个Processor线程中的某一个，并由其处理接下来该SocketChannel上的读写请求，其中N=num.network.threads，默认为3。
+ *      当Processor线程监听来自SocketChannel的请求时，会将请求放置在RequestChannel中的请求队列；
+ *      当Processor线程会将响应从RequestChannel中的响应队列中取出来并发送给客户端。
+ *    KafkaRequestHandlerPool内部的KafkaRequestHandler线程从RequestChannel内部的Request阻塞队列取出Request进行处理。KafkaRequestHandler线程数num.io.threads 默认 8
+ *
+ *   请求数据线程流转：
+ *        Acceptor线程 => SocketChannel分配到Processor线程(num.network.threads)
+ *        Processor线程(num.network.threads) => RequestChannel请求队列
+ *        RequestChannel请求队列  => KafkaRequestHandler线程(num.io.threads) => KafkaApis.handle
  */
 class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNamePrefix: Option[String] = None,
                   kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
@@ -142,12 +156,16 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   val brokerState: BrokerState = new BrokerState
 
+  // KafkaApis 业务逻辑实现层
   var dataPlaneRequestProcessor: KafkaApis = null
   var controlPlaneRequestProcessor: KafkaApis = null
 
   var authorizer: Option[Authorizer] = None
+
   var socketServer: SocketServer = null
+  // 监听Socket请求
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
+  // KafkaRequestHandlerPool资源池(线程池), dataPlaneRequestHandlerPool里面包含了num.io.threads个IO处理线程，默认为8个
   var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
 
   var logDirFailureChannel: LogDirFailureChannel = null
@@ -296,6 +314,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
+        // nio服务
         // Create and start the socket server acceptor threads so that the bound port is known.
         // Delay starting processors until the end of the initialization sequence to ensure
         // that credentials have been loaded before processing authentications.
@@ -357,6 +376,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
           fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache)
 
+        // 请求处理线程池, 线程数：num.io.threads 默认 8
         dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
           config.numIoThreads, s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.DataPlaneThreadPrefix)
 
