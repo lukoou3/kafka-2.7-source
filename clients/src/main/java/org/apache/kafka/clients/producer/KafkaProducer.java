@@ -414,7 +414,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.accumulator = new RecordAccumulator(logContext,
                     config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.compressionType,
-                    lingerMs(config),
+                    lingerMs(config), // linger.ms 默认是0, 来一条数据发送一条
                     retryBackoffMs,
                     deliveryTimeoutMs,
                     metrics,

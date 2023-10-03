@@ -554,6 +554,7 @@ public class Sender implements Runnable {
     }
 
     /**
+     * 处理生产数据的响应
      * Handle a produce response
      */
     private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, long now) {
@@ -591,6 +592,7 @@ public class Sender implements Runnable {
     }
 
     /**
+     * 完成批次
      * Complete or retry the given batch of records.
      *
      * @param batch The record batch
@@ -678,6 +680,7 @@ public class Sender implements Runnable {
         }
 
         if (batch.done(response.baseOffset, response.logAppendTime, null)) {
+            // 完成批次，释放内存
             maybeRemoveAndDeallocateBatch(batch);
         }
     }
@@ -771,6 +774,7 @@ public class Sender implements Runnable {
         RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, time.milliseconds());
 
         String nodeId = Integer.toString(destination);
+        // 发送生产数据请求，并且注册响应的处理callback
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
                 requestTimeoutMs, callback);
         client.send(clientRequest, now);

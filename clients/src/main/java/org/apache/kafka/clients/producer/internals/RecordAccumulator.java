@@ -690,6 +690,7 @@ public final class RecordAccumulator {
         // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
         if (!batch.isSplitBatch())
+            // 释放这个批次的内存
             free.deallocate(batch.buffer(), batch.initialCapacity());
     }
 

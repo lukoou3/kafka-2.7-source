@@ -268,12 +268,16 @@ public class BufferPool {
     public void deallocate(ByteBuffer buffer, int size) {
         lock.lock();
         try {
+            // 返还到内存池
             if (size == this.poolableSize && size == buffer.capacity()) {
                 buffer.clear();
                 this.free.add(buffer);
-            } else {
+            }
+            // 不用内存池控制
+            else {
                 this.nonPooledAvailableMemory += size;
             }
+            // 唤醒等待申请内存线程
             Condition moreMem = this.waiters.peekFirst();
             if (moreMem != null)
                 moreMem.signal();
