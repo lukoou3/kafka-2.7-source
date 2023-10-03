@@ -433,6 +433,7 @@ public final class RecordAccumulator {
     }
 
     /**
+     * 获取已准备好发送分区的节点列表：1、满一个批次； 2、经过lingerMs时长
      * Get a list of nodes whose partitions are ready to be sent, and the earliest time at which any non-sendable
      * partition will be ready; Also return the flag for whether there are any unknown leaders for the accumulated
      * partition batches.
@@ -458,8 +459,10 @@ public final class RecordAccumulator {
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
         Set<String> unknownLeaderTopics = new HashSet<>();
 
-        boolean exhausted = this.free.queued() > 0;
+        boolean exhausted = this.free.queued() > 0; // waiters.size() > 0 说明内存不够用了
+        // 遍历分区
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
+            // 分区对应的批次队列
             Deque<ProducerBatch> deque = entry.getValue();
             synchronized (deque) {
                 // When producing to a large number of partitions, this path is hot and deques are often empty.
@@ -467,17 +470,22 @@ public final class RecordAccumulator {
                 ProducerBatch batch = deque.peekFirst();
                 if (batch != null) {
                     TopicPartition part = entry.getKey();
+                    // 获取分区leader
                     Node leader = cluster.leaderFor(part);
                     if (leader == null) {
                         // This is a partition for which leader is not known, but messages are available to send.
                         // Note that entries are currently not removed from batches when deque is empty.
                         unknownLeaderTopics.add(part.topic());
-                    } else if (!readyNodes.contains(leader) && !isMuted(part)) {
+                    }
+                    // 判断此分区leader的数据是否应该发送，加入过就不用再判断了
+                    else if (!readyNodes.contains(leader) && !isMuted(part)) {
                         long waitedTimeMs = batch.waitedTimeMs(nowMs);
                         boolean backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
+                        // lingerMs这个时长默认是0，也就是来一条数据发送一条。可以增大以增大吞吐量。
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
-                        boolean full = deque.size() > 1 || batch.isFull();
-                        boolean expired = waitedTimeMs >= timeToWaitMs;
+                        boolean full = deque.size() > 1 || batch.isFull(); // 批次队列大于1或者第1批次已满
+                        boolean expired = waitedTimeMs >= timeToWaitMs; // 到达时间
+                        // 判断分区数据是否可以发送
                         boolean sendable = full || expired || exhausted || closed || flushInProgress();
                         if (sendable && !backingOff) {
                             readyNodes.add(leader);

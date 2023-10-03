@@ -331,7 +331,7 @@ public class Sender implements Runnable {
 
     private long sendProducerData(long now) {
         Cluster cluster = metadata.fetch();
-        // 获取要发送数据的分区
+        // 获取要发送数据的分区。获取已准备好发送分区的节点列表：1、满一个批次； 2、经过lingerMs时长
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
@@ -362,6 +362,7 @@ public class Sender implements Runnable {
         }
 
         /**
+         * 只发送已准备好发送分区的节点列表(result.readyNodes)。不过会发送这些节点的所有分区
          * 有可能要发送的partition有多个，可能有些partition的leader是同一个broker，同一个broker分为一组
          * p0: b0, p1: b0, p2: b1, p3: b1 => b0 -> (p0, p1), b1 -> (p2, p3)
          */
