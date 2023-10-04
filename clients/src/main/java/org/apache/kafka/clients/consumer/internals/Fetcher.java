@@ -242,6 +242,7 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
+     * 为我们已分配分区的所有节点设置一个提取请求，构造请求
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
      * @return number of fetches sent
@@ -250,10 +251,12 @@ public class Fetcher<K, V> implements Closeable {
         // Update metrics in case there was an assignment change
         sensors.maybeUpdateAssignment(subscriptions);
 
+        // 构造请求，和生产者发送数据类似，把同一个Node的partition合并，统一发送
         Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareFetchRequests();
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
             final Node fetchTarget = entry.getKey();
             final FetchSessionHandler.FetchRequestData data = entry.getValue();
+            // ApiKeys.FETCH
             final FetchRequest.Builder request = FetchRequest.Builder
                     .forConsumer(this.maxWaitMs, this.minBytes, data.toSend())
                     .isolationLevel(isolationLevel)
@@ -265,6 +268,7 @@ public class Fetcher<K, V> implements Closeable {
             if (log.isDebugEnabled()) {
                 log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
             }
+            // 发送请求, 服务端处理请求去看服务端KafkaApis类处理ApiKeys.FETCH请求类型
             RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
             // We add the node to the set of nodes with pending fetch requests before adding the
             // listener because the future may have been fulfilled on another thread (e.g. during a
@@ -276,6 +280,7 @@ public class Fetcher<K, V> implements Closeable {
                 public void onSuccess(ClientResponse resp) {
                     synchronized (Fetcher.this) {
                         try {
+                            // 返回数据
                             @SuppressWarnings("unchecked")
                             FetchResponse<Records> response = (FetchResponse<Records>) resp.responseBody();
                             FetchSessionHandler handler = sessionHandler(fetchTarget.id());
@@ -1145,22 +1150,28 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
+     * 为我们已分配分区的所有节点设置一个提取请求，构造请求
+     * 每个node发送一个请求，节约网络资源
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
+        // 和生产者发送数据类似，把同一个Node的partition合并，统一发送
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
 
         validatePositionsOnMetadataChange();
 
         long currentTimeMs = time.milliseconds();
 
+        // 遍历所有要拉取的分区
         for (TopicPartition partition : fetchablePartitions()) {
+            // 获取分区position
             FetchPosition position = this.subscriptions.position(partition);
             if (position == null) {
                 throw new IllegalStateException("Missing position for fetchable partition " + partition);
             }
 
+            // 从leader拉取数据
             Optional<Node> leaderOpt = position.currentLeader.leader;
             if (!leaderOpt.isPresent()) {
                 log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
@@ -1192,6 +1203,7 @@ public class Fetcher<K, V> implements Closeable {
                     fetchable.put(node, builder);
                 }
 
+                // 要拉取的分区
                 builder.add(partition, new FetchRequest.PartitionData(position.offset,
                     FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
                     position.currentLeader.epoch, Optional.empty()));
