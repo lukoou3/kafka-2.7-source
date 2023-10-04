@@ -1149,6 +1149,7 @@ class Partition(val topicPartition: TopicPartition,
       }
     }
 
+    // 从localLog读取数据
     val fetchedData = localLog.read(fetchOffset, maxBytes, fetchIsolation, minOneMessage)
     LogReadInfo(
       fetchedData = fetchedData,

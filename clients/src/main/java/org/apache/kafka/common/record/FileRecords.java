@@ -37,6 +37,9 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
+ * 由文件支持的记录实现。一个可选的开始和结束位置可以应用于这个实例，以允许对一系列日志记录进行切片。
+ * 消费者消费日志时，服务端响应封装的是这个，写入socket时，直接把数据从这个FileChannel写入KafkaChannel
+ * 这就是为啥kafka为啥读取日志这么快，性能高，而且不消耗java内存
  * A {@link Records} implementation backed by a file. An optional start and end position can be applied to this
  * instance to enable slicing a range of the log records.
  */
@@ -281,6 +284,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         long position = start + offset;
         int count = Math.min(length, oldSize);
         final long bytesTransferred;
+        // 直接使用nio写数据，不经过java进程
         if (destChannel instanceof TransportLayer) {
             TransportLayer tl = (TransportLayer) destChannel;
             bytesTransferred = tl.transferFrom(channel, position, count);

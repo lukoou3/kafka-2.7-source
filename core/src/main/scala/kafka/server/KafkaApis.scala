@@ -661,6 +661,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   /**
+   * 处理拉取数据请求
    * Handle a fetch request
    */
   def handleFetchRequest(request: RequestChannel.Request): Unit = {
@@ -723,6 +724,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
+    // handleFetchRequest方法内的函数
     def maybeDownConvertStorageError(error: Errors, version: Short): Errors = {
       // If consumer sends FetchRequest V5 or earlier, the client library is not guaranteed to recognize the error code
       // for KafkaStorageException. In this case the client library will translate KafkaStorageException to
@@ -735,6 +737,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
+    // handleFetchRequest方法内的函数
     def maybeConvertFetchedData(tp: TopicPartition,
                                 partitionData: FetchResponse.PartitionData[Records]): FetchResponse.PartitionData[BaseRecords] = {
       val logConfig = replicaManager.getLogConfig(tp)
@@ -799,6 +802,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
+    // handleFetchRequest方法内的函数，返回拉取数据，响应客户端，这里真正从FetchPartitionData的FileRecords读取数据
     // the callback for process a fetch response, invoked before throttling
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       val partitions = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
@@ -823,6 +827,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       var unconvertedFetchResponse: FetchResponse[Records] = null
 
+      // 创建FetchResponse
       def createResponse(throttleTimeMs: Int): FetchResponse[BaseRecords] = {
         // Down-convert messages for each partition if required
         val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[BaseRecords]]
@@ -893,6 +898,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           trace(s"Sending Fetch response with partitions.size=$responseSize, metadata=${unconvertedFetchResponse.sessionId}")
         }
 
+        // 发送响应
         // Send the response immediately.
         sendResponse(request, Some(createResponse(maxThrottleTimeMs)), Some(updateConversionStats))
       }
@@ -911,6 +917,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (interesting.isEmpty)
       processResponseCallback(Seq.empty)
     else {
+      // 调用replicaManager拉取数据从本地副本
       // call the replica manager to fetch messages from the local replica
       replicaManager.fetchMessages(
         fetchRequest.maxWait.toLong,
@@ -3386,6 +3393,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         new RequestChannel.NoOpResponse(request)
     }
 
+    // 发送响应
     requestChannel.sendResponse(response)
   }
 

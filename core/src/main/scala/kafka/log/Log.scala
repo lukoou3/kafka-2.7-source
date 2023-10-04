@@ -1530,6 +1530,8 @@ class Log(@volatile private var _dir: File,
       // We create the local variables to avoid race conditions with updates to the log.
       val endOffsetMetadata = nextOffsetMetadata
       val endOffset = endOffsetMetadata.messageOffset
+      // 从startOffset计算要读取的segment。返回与小于或等于给定键的最大键相关联的键值映射，如果没有此类键，则返回null。
+      // segments 跳表结构 ConcurrentSkipListMap[Long, LogSegment]
       var segmentEntry = segments.floorEntry(startOffset)
 
       // return error on attempt to read beyond the log end offset or read below log start offset
@@ -1565,6 +1567,7 @@ class Log(@volatile private var _dir: File,
           }
         }
 
+        // 从segment读取
         val fetchInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
         if (fetchInfo == null) {
           segmentEntry = segments.higherEntry(segmentEntry.getKey)

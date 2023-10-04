@@ -55,6 +55,7 @@ public abstract class RecordsSend<T extends BaseRecords> implements Send {
         long written = 0;
 
         if (remaining > 0) {
+            // 往channel中写数据
             written = writeTo(channel, size() - remaining, remaining);
             if (written < 0)
                 throw new EOFException("Wrote negative bytes to channel. This shouldn't happen.");

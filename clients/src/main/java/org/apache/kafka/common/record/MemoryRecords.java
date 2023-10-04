@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
+ * 由ByteBuffer支持的Records实现。这仅用于读取或就地修改已存在的record batches。
  * A {@link Records} implementation backed by a ByteBuffer. This is used only for reading or
  * modifying in-place an existing buffer of record batches. To create a new buffer see {@link MemoryRecordsBuilder},
  * or one of the {@link #builder(ByteBuffer, byte, CompressionType, TimestampType, long)} variants.

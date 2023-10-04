@@ -1013,6 +1013,8 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /**
+   * 从副本中提取消息，并等待，直到可以提取并返回足够的数据；当超时或所需的获取信息得到满足时，将触发回调函数。
+   * 消费者可以从任何复制品中获取，但追随者只能从领导者那里获取。
    * Fetch messages from a replica, and wait until enough data can be fetched and return;
    * the callback function will be triggered either when timeout or required fetch info is satisfied.
    * Consumers may fetch from any replica, but followers can only fetch from the leader.
@@ -1039,6 +1041,7 @@ class ReplicaManager(val config: KafkaConfig,
     // Restrict fetching to leader if request is from follower or from a client with older version (no ClientMetadata)
     val fetchOnlyFromLeader = isFromFollower || (isFromConsumer && clientMetadata.isEmpty)
     def readFromLog(): Seq[(TopicPartition, LogReadResult)] = {
+      // 从本地Log中读取数据
       val result = readFromLocalLog(
         replicaId = replicaId,
         fetchOnlyFromLeader = fetchOnlyFromLeader,
@@ -1052,6 +1055,7 @@ class ReplicaManager(val config: KafkaConfig,
       else result
     }
 
+    // 从Log中读取数据
     val logReadResults = readFromLog()
 
     // check if this fetch request can be satisfied right away
@@ -1116,6 +1120,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /**
+   * 以给定的偏移量从多个主题分区读取，最大可达maxSize字节
    * Read from multiple topic partitions at the given offset up to maxSize bytes
    */
   def readFromLocalLog(replicaId: Int,
@@ -1128,6 +1133,7 @@ class ReplicaManager(val config: KafkaConfig,
                        clientMetadata: Option[ClientMetadata]): Seq[(TopicPartition, LogReadResult)] = {
     val traceEnabled = isTraceEnabled
 
+    // 读取分区数据
     def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
       val partitionFetchSize = fetchInfo.maxBytes
@@ -1165,6 +1171,7 @@ class ReplicaManager(val config: KafkaConfig,
             preferredReadReplica = preferredReadReplica,
             exception = None)
         } else {
+          // 读取数据
           // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
           val readInfo: LogReadInfo = partition.readRecords(
             lastFetchedEpoch = fetchInfo.lastFetchedEpoch,
@@ -1239,7 +1246,9 @@ class ReplicaManager(val config: KafkaConfig,
     var limitBytes = fetchMaxBytes
     val result = new mutable.ArrayBuffer[(TopicPartition, LogReadResult)]
     var minOneMessage = !hardMaxBytesLimit
+    // 遍历每个分区读取数据
     readPartitionInfo.foreach { case (tp, fetchInfo) =>
+      // 读取分区数据
       val readResult = read(tp, fetchInfo, limitBytes, minOneMessage)
       val recordBatchSize = readResult.info.records.sizeInBytes
       // Once we read from a non-empty partition, we stop ignoring request and partition level size limits
