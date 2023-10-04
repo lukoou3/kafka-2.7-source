@@ -115,6 +115,8 @@ abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: 
       if(newlyCreated) {
         if(maxIndexSize < entrySize)
           throw new IllegalArgumentException("Invalid max index size: " + maxIndexSize)
+        // 新建文件直接设置大小。
+        // 关闭文件时将该段修剪为只适合有效条目，删除文件中所有未写入的尾随字节。
         raf.setLength(roundDownToExactMultiple(maxIndexSize, entrySize))
       }
 
@@ -234,6 +236,7 @@ abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: 
   }
 
   /**
+   * 将该段修剪为只适合有效条目，删除文件中所有未写入的尾随字节。
    * Trim this segment to fit just the valid entries, deleting all trailing unwritten bytes from
    * the file.
    */

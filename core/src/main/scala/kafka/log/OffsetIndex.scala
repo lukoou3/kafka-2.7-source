@@ -143,6 +143,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
       require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
       if (_entries == 0 || offset > _lastOffset) {
         trace(s"Adding index entry $offset => $position to ${file.getAbsolutePath}")
+        // mmap: MappedByteBuffer 使用nio直接映射内存修改
         mmap.putInt(relativeOffset(offset))
         mmap.putInt(position)
         _entries += 1
