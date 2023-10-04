@@ -81,6 +81,7 @@ class KafkaRequestHandler(id: Int,
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           } finally {
+            // 释放归还请求ByteBuffer
             request.releaseBuffer()
           }
 

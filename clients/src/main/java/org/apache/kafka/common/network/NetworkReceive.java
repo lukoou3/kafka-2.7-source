@@ -26,6 +26,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ScatteringByteChannel;
 
 /**
+ * 大小分隔的接收，由4字节的网络顺序大小N和N字节的内容组成
+ * 这个是解决tcp的粘包拆包吧
  * A size delimited Receive that consists of a 4 byte network-ordered size N followed by N bytes of content
  */
 public class NetworkReceive implements Receive {
@@ -91,29 +93,34 @@ public class NetworkReceive implements Receive {
 
     public long readFrom(ScatteringByteChannel channel) throws IOException {
         int read = 0;
+        // 读取size。这个是解决tcp的粘包拆包吧
         if (size.hasRemaining()) {
             int bytesRead = channel.read(size);
             if (bytesRead < 0)
                 throw new EOFException();
             read += bytesRead;
+            // 读取到完整的size
             if (!size.hasRemaining()) {
-                size.rewind();
+                size.rewind(); // 回退此缓冲区。位置被设置为零，标记被丢弃。
                 int receiveSize = size.getInt();
                 if (receiveSize < 0)
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + ")");
                 if (maxSize != UNLIMITED && receiveSize > maxSize)
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + " larger than " + maxSize + ")");
                 requestedBufferSize = receiveSize; //may be 0 for some payloads (SASL)
+                // 0字节数组单独处理
                 if (receiveSize == 0) {
                     buffer = EMPTY_BUFFER;
                 }
             }
         }
         if (buffer == null && requestedBufferSize != -1) { //we know the size we want but havent been able to allocate it yet
+            // 从memoryPool申请buffer
             buffer = memoryPool.tryAllocate(requestedBufferSize);
             if (buffer == null)
                 log.trace("Broker low on memory - could not allocate buffer of size {} for source {}", requestedBufferSize, source);
         }
+        // 申请到buffer，读数据。申请不到，等待内存释放再读
         if (buffer != null) {
             int bytesRead = channel.read(buffer);
             if (bytesRead < 0)

@@ -477,6 +477,7 @@ public class Selector implements Selectable, AutoCloseable {
                 pollSelectionKeys(toPoll, false, endSelect);
             }
 
+            // 处理数据
             // Poll from channels where the underlying socket has more data
             pollSelectionKeys(readyKeys, false, endSelect);
             // Clear all selected keys so that they are included in the ready count for the next select
@@ -569,6 +570,7 @@ public class Selector implements Selectable, AutoCloseable {
                     addToCompletedReceives(channel, receive, currentTimeMs);
                 });
 
+                // 如果通道已准备就绪，并且有字节要从套接字或缓冲区读取，并且之前没有完成接收，则从中读取
                 //if channel is ready and has bytes to read from socket or buffer, and has no
                 //previous completed receive then read from it
                 if (channel.ready() && (key.isReadable() || channel.hasBytesBuffered()) && !hasCompletedReceive(channel)
@@ -671,6 +673,7 @@ public class Selector implements Selectable, AutoCloseable {
     private void attemptRead(KafkaChannel channel) throws IOException {
         String nodeId = channel.id();
 
+        // 从KafkaChannel读取数据
         long bytesReceived = channel.read();
         if (bytesReceived != 0) {
             long currentTimeMs = time.milliseconds();

@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 
 /**
+ * SimpleMemoryPool的一个扩展，它跟踪分配的缓冲区，并在它们“泄漏”时记录错误（当它们在未释放（）的情况下被垃圾收集时）。这个实现是一个开发/调试辅助工具，并不意味着生产前使用。
  * An extension of SimpleMemoryPool that tracks allocated buffers and logs an error when they "leak"
  * (when they are garbage-collected without having been release()ed).
  * THIS IMPLEMENTATION IS A DEVELOPMENT/DEBUGGING AID AND IS NOT MEANT PRO PRODUCTION USE.

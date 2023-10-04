@@ -389,11 +389,13 @@ public class KafkaChannel implements AutoCloseable {
         return null;
     }
 
+    // 使用receive读取数据，解决tcp粘包拆包
     public long read() throws IOException {
         if (receive == null) {
             receive = new NetworkReceive(maxReceiveSize, id, memoryPool);
         }
 
+        // 调用receive.readFrom(transportLayer)
         long bytesReceived = receive(this.receive);
 
         if (this.receive.requiredMemoryAmountKnown() && !this.receive.memoryAllocated() && isInMutableState()) {

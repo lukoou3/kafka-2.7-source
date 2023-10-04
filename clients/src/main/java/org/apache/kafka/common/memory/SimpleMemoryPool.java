@@ -26,6 +26,11 @@ import org.slf4j.LoggerFactory;
 
 
 /**
+ * 一个简单的池实现。这个实现只提供了对未处理内存总量的限制。
+ * 分配的任何缓冲区都必须始终释放（），否则内存不会标记为已回收（和“泄漏”）
+ *
+ * 这个申请直接调用了ByteBuffer.allocate(sizeBytes), 释放什么也不做，并没有缓存复用ByteBuffer。只是控制使用的内存总量。
+ *
  * a simple pool implementation. this implementation just provides a limit on the total outstanding memory.
  * any buffer allocated must be release()ed always otherwise memory is not marked as reclaimed (and "leak"s)
  */

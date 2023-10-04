@@ -97,6 +97,7 @@ class SocketServer(val config: KafkaConfig,
   private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", MetricsGroup)
   private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", MetricsGroup)
   memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
+  // queued.max.request.bytes, 默认-1
   private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
   // data-plane
   private val dataPlaneProcessors = new ConcurrentHashMap[Int, Processor]()
@@ -772,6 +773,9 @@ private[kafka] object Processor {
  * 然后将对应的Response放回至Response阻塞队列，并触发Processor线程监听的OP_WRITE事件，
  * 最后由Processor线程将Response发送至客户端。
  *
+ * memoryPool: MemoryPool, // queued.max.request.bytes, 默认-1.
+ * 可见解析socket流不限制pool，而且MemoryPool也不缓存复用buffer。生产者发送消息会复用批次buffer，可能那个实现比较简单和适合吧。
+ *
  * Thread that processes all requests from a single connection. There are N of these running in parallel
  * each of which has its own selector
  */
@@ -787,7 +791,7 @@ private[kafka] class Processor(val id: Int,
                                config: KafkaConfig,
                                metrics: Metrics,
                                credentialProvider: CredentialProvider,
-                               memoryPool: MemoryPool,
+                               memoryPool: MemoryPool, // queued.max.request.bytes, 默认-1
                                logContext: LogContext,
                                connectionQueueSize: Int = ConnectionQueueSize) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
@@ -1010,6 +1014,8 @@ private[kafka] class Processor(val id: Int,
                 val context = new RequestContext(header, connectionId, channel.socketAddress,
                   channel.principal, listenerName, securityProtocol,
                   channel.channelMetadataRegistry.clientInformation)
+                // 构造Request, receive.payload就直接是ByteBuffer
+                // apis.handle(request) 后会 释放归还请求ByteBuffer，调用[[kafka.network.RequestChannel.Request.releaseBuffer]]
                 val req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
                 // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
@@ -1022,6 +1028,7 @@ private[kafka] class Processor(val id: Int,
                       apiVersionsRequest.data.clientSoftwareVersion))
                   }
                 }
+                // 转发请求到requestChannel
                 requestChannel.sendRequest(req)
                 selector.mute(connectionId)
                 handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
