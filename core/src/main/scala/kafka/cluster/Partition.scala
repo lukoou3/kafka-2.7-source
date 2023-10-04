@@ -1065,6 +1065,7 @@ class Partition(val topicPartition: TopicPartition,
   def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
+        // 往leader分区Log写records(MemoryRecords), MemoryRecords就是对ByteBuffer的包装
         case Some(leaderLog) =>
           val minIsr = leaderLog.config.minInSyncReplicas
           val inSyncSize = isrState.isr.size
@@ -1075,6 +1076,8 @@ class Partition(val topicPartition: TopicPartition,
               s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
           }
 
+          // leader分区Log写records(MemoryRecords), MemoryRecords就是对ByteBuffer的包装
+          // 写入当前 active segment
           val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
             interBrokerProtocolVersion)
 

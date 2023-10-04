@@ -1072,7 +1072,11 @@ class Log(@volatile private var _dir: File,
   }
 
   /**
+   * 将此消息集附加到日志的活动段，必要时滚动到新段。
+   *
    * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
+   *
+   * 此方法通常负责为消息分配偏移量，但是，如果传递assignOffsets=false标志，我们将只检查现有偏移量是否有效。
    *
    * This method will generally be responsible for assigning offsets to the messages,
    * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
@@ -1108,11 +1112,13 @@ class Log(@volatile private var _dir: File,
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
         if (assignOffsets) {
+          // 分配 offset
           // assign offsets to the message set
           val offset = new LongRef(nextOffsetMetadata.messageOffset)
           appendInfo.firstOffset = Some(offset.value)
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
+            // 验证消息并且分配更新Offsets，分配更新Offsets是直接操作的buffer
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
               topicPartition,
               offset,
@@ -1140,10 +1146,12 @@ class Log(@volatile private var _dir: File,
           if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
             appendInfo.logAppendTime = now
 
+          // 如果消息大小可能已更改（由于重新压缩或消息格式转换），则重新验证消息大小
           // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
           // format conversion)
           if (!ignoreRecordSize && validateAndOffsetAssignResult.messageSizeMaybeChanged) {
             for (batch <- validRecords.batches.asScala) {
+              // 这里为啥是message.max.bytes
               if (batch.sizeInBytes > config.maxMessageSize) {
                 // we record the original message set size instead of the trimmed size
                 // to be consistent with pre-compression bytesRejectedRate recording
@@ -1200,6 +1208,7 @@ class Log(@volatile private var _dir: File,
             s"to partition $topicPartition, which exceeds the maximum configured segment size of ${config.segmentSize}.")
         }
 
+        // 获取segment，可能滚动生成新的segment
         // maybe roll the log if this segment is full
         val segment = maybeRoll(validRecords.sizeInBytes, appendInfo)
 
@@ -1221,6 +1230,7 @@ class Log(@volatile private var _dir: File,
           return appendInfo
         }
 
+        // records(MemoryRecords)添加到segment, 核心方法
         segment.append(largestOffset = appendInfo.lastOffset,
           largestTimestamp = appendInfo.maxTimestamp,
           shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
@@ -1865,6 +1875,11 @@ class Log(@volatile private var _dir: File,
   def logEndOffset: Long = nextOffsetMetadata.messageOffset
 
   /**
+   * 如有必要，将日志滚动到新的空日志段。
+   *    logSegment达到1g(一般触发这个)
+   *    定期，如果配置
+   *    index大小达到阈值
+   *
    * Roll the log over to a new empty log segment if necessary.
    *
    * @param messagesSize The messages set size in bytes.

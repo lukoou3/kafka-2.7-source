@@ -152,8 +152,10 @@ class LogSegment private[log] (val log: FileRecords,
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
 
+      // 校验offset, offset - baseOffset 范围[0, intMax]
       ensureOffsetInRange(largestOffset)
 
+      // append消息, 直接把records写入fileChannel, 直接调用nio方法
       // append the messages
       val appendedBytes = log.append(records)
       trace(s"Appended $appendedBytes to ${log.file} at end offset $largestOffset")
@@ -162,9 +164,12 @@ class LogSegment private[log] (val log: FileRecords,
         maxTimestampSoFar = largestTimestamp
         offsetOfMaxTimestampSoFar = shallowOffsetOfMaxTimestamp
       }
+      // 更新index, 当写入大小 > 4096 (index.interval.bytes)
       // append an entry to the index (if needed)
       if (bytesSinceLastIndexEntry > indexIntervalBytes) {
+        // 更新offsetIndex索引, 写入8Byte: relativeOffset + position
         offsetIndex.append(largestOffset, physicalPosition)
+        // timeIndex不太重要, 先忽略
         timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar)
         bytesSinceLastIndexEntry = 0
       }

@@ -519,9 +519,18 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   /**
+   * 处理生产消息请求:
+   *    从请求体中获取分区数据(Map[TopicPartition, MemoryRecords])
+   *    调用replicaManager把消息写入replicas. [[kafka.server.ReplicaManager.appendRecords]]
+   *    replicaManager遍历分区写入本地文件. [[kafka.cluster.Partition.appendRecordsToLeader]]
+   *    Log把records写入当前 active segment. [[kafka.log.Log.appendAsLeader]]
+   *    分配 offset, 可能滚动segment, records写入segment. [[kafka.log.LogSegment.append]]
+   *    直接把records buffer 写入fileChannel, 更新offsetIndex(每写入大小 > 4096). [[kafka.log.LogSegment.append]]
+   *
    * Handle a produce request
    */
   def handleProduceRequest(request: RequestChannel.Request): Unit = {
+    // 生产消息请求体
     val produceRequest = request.body[ProduceRequest]
     val numBytesAppended = request.header.toStruct.sizeOf + request.sizeOfBodyInBytes
 
@@ -539,6 +548,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       return
     }
 
+    //  分区数据(Map[TopicPartition, MemoryRecords])
     val produceRecords = produceRequest.partitionRecordsOrFail.asScala
     val unauthorizedTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
@@ -546,6 +556,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
     val authorizedTopics = filterByAuthorized(request.context, WRITE, TOPIC, produceRecords)(_._1.topic)
 
+    // 校验, 先忽略
     for ((topicPartition, memoryRecords) <- produceRecords) {
       if (!authorizedTopics.contains(topicPartition.topic))
         unauthorizedTopicResponses += topicPartition -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
@@ -561,6 +572,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
     }
 
+    // 返回请求的回调函数
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses ++ invalidRequestResponses
@@ -631,13 +643,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
 
+      // 调用replicaManager把消息写入replicas
       // call the replica manager to append messages to the replicas
       replicaManager.appendRecords(
         timeout = produceRequest.timeout.toLong,
         requiredAcks = produceRequest.acks,
         internalTopicsAllowed = internalTopicsAllowed,
         origin = AppendOrigin.Client,
-        entriesPerPartition = authorizedRequestInfo,
+        entriesPerPartition = authorizedRequestInfo, // 分区数据:Map[TopicPartition, MemoryRecords]
         responseCallback = sendResponseCallback,
         recordConversionStatsCallback = processingStatsCallback)
 

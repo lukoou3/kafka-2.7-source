@@ -163,7 +163,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         if (records.sizeInBytes() > Integer.MAX_VALUE - size.get())
             throw new IllegalArgumentException("Append of size " + records.sizeInBytes() +
                     " bytes is too large for segment with current file position at " + size.get());
-
+        // 直接把records写入fileChannel, 直接调用nio方法
         int written = records.writeFullyTo(channel);
         size.getAndAdd(written);
         return written;
