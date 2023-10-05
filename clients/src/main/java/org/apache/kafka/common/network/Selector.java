@@ -253,13 +253,14 @@ public class Selector implements Selectable, AutoCloseable {
         try {
             configureSocketChannel(socketChannel, sendBufferSize, receiveBufferSize);
             boolean connected = doConnect(socketChannel, address);
+            // 注册socketChannel, channels.put(id, channel)
             key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
 
             if (connected) {
                 // OP_CONNECT won't trigger for immediately connected channels
                 log.debug("Immediately connected to node {}", id);
                 immediatelyConnectedKeys.add(key);
-                key.interestOps(0);
+                key.interestOps(0); // OP_READ
             }
         } catch (IOException | RuntimeException e) {
             if (key != null)
@@ -590,7 +591,7 @@ public class Selector implements Selectable, AutoCloseable {
                 }
 
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
-
+                // 写数据。如果通道已准备好写入缓冲区中有空间并且我们有数据的任何套接字
                 long nowNanos = channelStartTimeNanos != 0 ? channelStartTimeNanos : currentTimeNanos;
                 try {
                     attemptWrite(key, channel, nowNanos);
@@ -681,6 +682,7 @@ public class Selector implements Selectable, AutoCloseable {
             sensors.recordBytesReceived(nodeId, bytesReceived, currentTimeMs);
             madeReadProgressLastPoll = true;
 
+            // 读取完毕就返回，否则返回null
             NetworkReceive receive = channel.maybeCompleteReceive();
             if (receive != null) {
                 addToCompletedReceives(channel, receive, currentTimeMs);

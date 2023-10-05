@@ -155,11 +155,13 @@ final class ClusterConnectionStates {
             log.info("Hostname for node {} changed from {} to {}.", id, connectionState.host(), host);
         }
 
+        // 节点状态
         // Create a new NodeConnectionState if nodeState does not already contain one
         // for the specified id or if the hostname associated with the node id changed.
         nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
                 reconnectBackoff.backoff(0), connectionSetupTimeout.backoff(0), host,
                 clientDnsLookup, hostResolver));
+        // 正在连接的节点
         connectingNodes.add(id);
     }
 

@@ -118,6 +118,7 @@ public class NetworkClient implements KafkaClient {
     private final Time time;
 
     /**
+     * 如果我们应该在第一次连接到代理时发送ApiVersionRequest，则为True。
      * True if we should send an ApiVersionRequest when first connecting to a broker.
      */
     private final boolean discoverBrokerVersions;
@@ -294,6 +295,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * 开始连接到给定的节点，如果我们已经连接并准备发送到该节点，则返回true。
      * Begin connecting to the given node, return true if we are already connected and ready to send to that node.
      *
      * @param node The node to check
@@ -309,6 +311,7 @@ public class NetworkClient implements KafkaClient {
             return true;
 
         if (connectionStates.canConnect(node.idString(), now))
+            // 初始化连接
             // if we are interested in sending to a node and we don't have a connection to it, initiate one
             initiateConnect(node, now);
 
@@ -437,8 +440,8 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public boolean isReady(Node node, long now) {
-        // if we need to update our metadata now declare all requests unready to make metadata requests first
-        // priority
+        // 如果我们需要更新元数据，现在就声明所有请求都未就绪，以使元数据请求成为第一优先级
+        // if we need to update our metadata now declare all requests unready to make metadata requests first priority
         return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString(), now);
     }
 
@@ -498,6 +501,7 @@ public class NetworkClient implements KafkaClient {
                 version = versionInfo.latestUsableVersion(clientRequest.apiKey(), builder.oldestAllowedVersion(),
                         builder.latestAllowedVersion());
             }
+            // 发送请求
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
             doSend(clientRequest, isInternalRequest, now, builder.build(version));
@@ -533,10 +537,12 @@ public class NetworkClient implements KafkaClient {
                 send,
                 now);
         this.inFlightRequests.add(inFlightRequest);
+        // 发送请求到selector，实际仅仅是设置send，下次poll时发送send
         selector.send(send);
     }
 
     /**
+     * 进行实际的读写操作。
      * Do actual reads and writes to sockets.
      *
      * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately,
@@ -573,7 +579,7 @@ public class NetworkClient implements KafkaClient {
         handleCompletedReceives(responses, updatedNow);
         handleDisconnections(responses, updatedNow);
         handleConnections();
-        handleInitiateApiVersionRequests(updatedNow);
+        handleInitiateApiVersionRequests(updatedNow); // 初始化api版本请求
         handleTimedOutConnections(responses, updatedNow);
         handleTimedOutRequests(responses, updatedNow);
         completeResponses(responses);
@@ -869,18 +875,20 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * 处理相应
+     * 处理相应，从Collection<NetworkReceive>取出NetworkReceive处理
      * Handle any completed receives and update the response list with the responses received.
      *
      * @param responses The list of responses to update
      * @param now The current time
      */
     private void handleCompletedReceives(List<ClientResponse> responses, long now) {
+        // 遍历收到的NetworkReceive
         for (NetworkReceive receive : this.selector.completedReceives()) {
-            String source = receive.source();
-            InFlightRequest req = inFlightRequests.completeNext(source);
+            String source = receive.source(); // 哪个node发的
+            InFlightRequest req = inFlightRequests.completeNext(source); // 获取对应在处理中没完成的请求
             Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header,
                 throttleTimeSensor, now);
+            // 解析响应
             AbstractResponse response = AbstractResponse.
                 parseResponse(req.header.apiKey(), responseStruct, req.header.apiVersion());
 
@@ -894,6 +902,7 @@ public class NetworkClient implements KafkaClient {
             // 处理元数据响应
             if (req.isInternalRequest && response instanceof MetadataResponse)
                 metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) response);
+            // 处理ApiVersion响应
             else if (req.isInternalRequest && response instanceof ApiVersionsResponse)
                 handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) response);
             else
@@ -927,7 +936,7 @@ public class NetworkClient implements KafkaClient {
         }
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.data.apiKeys());
         apiVersions.update(node, nodeVersionInfo);
-        this.connectionStates.ready(node);
+        this.connectionStates.ready(node); // 连接就绪
         log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo);
     }
 

@@ -58,6 +58,7 @@ public class MockSelector implements Selectable {
         this.canConnect = canConnect;
     }
 
+    // 直接连接上
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
         if (canConnect == null || canConnect.test(address)) {
@@ -135,13 +136,16 @@ public class MockSelector implements Selectable {
 
     @Override
     public void poll(long timeout) throws IOException {
+        // 直接把请求和响应完成
         completeInitiatedSends();
+        // 通过外部自己调用完成返回，代替从网络读取
         completeDelayedReceives();
         time.sleep(timeout);
     }
 
     private void completeInitiatedSends() throws IOException {
         for (Send send : initiatedSends) {
+            // 直接把completedSends放到completedSends
             completeSend(send);
         }
         this.initiatedSends.clear();
@@ -185,10 +189,12 @@ public class MockSelector implements Selectable {
         return completedReceives;
     }
 
+    // 通过外部自己调用完成返回，代替从网络读取
     public void completeReceive(NetworkReceive receive) {
         this.completedReceives.add(receive);
     }
 
+    // 通过外部自己调用完成返回，代替从网络读取
     public void delayedReceive(DelayedReceive receive) {
         this.delayedReceives.add(receive);
     }

@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
+ * 已发送或正在发送但尚未收到响应的请求集
  * The set of requests which have been sent or are being sent but haven't yet received a response
  */
 final class InFlightRequests {
@@ -46,10 +47,11 @@ final class InFlightRequests {
         String destination = request.destination;
         Deque<NetworkClient.InFlightRequest> reqs = this.requests.get(destination);
         if (reqs == null) {
+            // 用的是数组Deque
             reqs = new ArrayDeque<>();
             this.requests.put(destination, reqs);
         }
-        reqs.addFirst(request);
+        reqs.addFirst(request); // 添加的是队列的头部
         inFlightRequestCount.incrementAndGet();
     }
 

@@ -122,9 +122,9 @@ public class NetworkClientTest {
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
-        return new NetworkClient(selector, metadataUpdater,
-                "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
-                connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
+        return new NetworkClient(selector, metadataUpdater, "mock-static", Integer.MAX_VALUE,
+                0, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata) {
@@ -154,6 +154,20 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
     }
 
+    /**
+     * 测试给没准备好的node发送请求
+     * java.lang.IllegalStateException: Attempt to send a request to node 5 which is not ready.
+     * 	    at org.apache.kafka.clients.NetworkClient.doSend(NetworkClient.java:483)
+     */
+    @Test
+    public void testSendToUnreadyNode2() {
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(Arrays.asList("test"), true);
+        long now = time.milliseconds();
+        ClientRequest request = client.newClientRequest("5", builder, now, false);
+        client.send(request, now);
+        client.poll(1, time.milliseconds());
+    }
+
     @Test
     public void testSimpleRequestResponse() {
         checkSimpleRequestResponse(client);
@@ -172,6 +186,7 @@ public class NetworkClientTest {
     @Test
     public void testDnsLookupFailure() {
         /* Fail cleanly when the node has a bad hostname */
+        //client.ready(new Node(1234, "badhost", 1234), time.milliseconds());
         assertFalse(client.ready(new Node(1234, "badhost", 1234), time.milliseconds()));
     }
 
@@ -208,8 +223,27 @@ public class NetworkClientTest {
         assertEquals(UnsupportedVersionException.class, metadataUpdater.getAndClearFailure().getClass());
     }
 
+    /**
+     * 在networkClient上测试一个简单的请求响应
+     *      等待node连接好：
+     *          client.ready(node) 连接node
+     *          client.poll 发送api版本请求
+     *          client.poll 处理响应 handleApiVersionsResponse 连接完成
+     *      发送一个ProduceRequest
+     *          client.send 发送请求到selector，实际仅仅是设置send，下次poll时发送send
+     *          client.poll 发送生产请求, 进行实际的读写操作
+     *      构造响应, 模拟服务端返回
+     *          selector.completeReceive
+     *      读取响应，进行实际的读写操作
+     *          client.poll handleCompletedReceives 处理响应
+     *
+     * client.send 发送请求是异步的，仅仅是把send放入队列。服务端返回响应也是异步的，把返回放入NetworkReceive
+     * client.poll 进行实际的读写操作， 实际生产者的Sender线程会不断轮训调用client.poll
+     */
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
+        // 等待node连接好，元数据可用
         awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
+        // 发送一个ProduceRequest
         ProduceRequest.Builder builder = new ProduceRequest.Builder(
                 PRODUCE.latestVersion(),
                 PRODUCE.latestVersion(),
@@ -220,9 +254,13 @@ public class NetworkClientTest {
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = networkClient.newClientRequest(
                 node.idString(), builder, time.milliseconds(), true, defaultRequestTimeoutMs, handler);
+        // 模拟发送生产消息请求
         networkClient.send(request, time.milliseconds());
+        // 进行实际的读写操作
         networkClient.poll(1, time.milliseconds());
+        // 生产消息请求肯定还在处理中，因为还没有触发响应
         assertEquals(1, networkClient.inFlightRequestCount());
+        // 构造响应
         ResponseHeader respHeader =
             new ResponseHeader(request.correlationId(),
                 request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
@@ -234,7 +272,9 @@ public class NetworkClientTest {
         responseHeaderStruct.writeTo(buffer);
         resp.writeTo(buffer);
         buffer.flip();
+        // 模拟生产消息请求处理响应
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+        // 进行实际的读写操作
         List<ClientResponse> responses = networkClient.poll(1, time.milliseconds());
         assertEquals(1, responses.size());
         assertTrue("The handler should have executed.", handler.executed);
@@ -253,10 +293,13 @@ public class NetworkClientTest {
         delayedApiVersionsResponse(0, apiVersionsResponseVersion, response);
     }
 
+    // 等待node连接好
     private void awaitReady(NetworkClient client, Node node) {
         if (client.discoverBrokerVersions()) {
+            // 设置api响应，client处理响应 handleApiVersionsResponse 时 标记 连接完成
             setExpectedApiVersionsResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
         }
+        // 开始连接到给定的节点，如果我们已经连接并准备发送到该节点(元数据有效)，则返回true。
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
         selector.clear();

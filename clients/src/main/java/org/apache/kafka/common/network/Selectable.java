@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * 异步多通道网络I/O接口
  * An interface for asynchronous, multi-channel network I/O
  */
 public interface Selectable {
@@ -34,6 +35,7 @@ public interface Selectable {
     int USE_DEFAULT_BUFFER_SIZE = -1;
 
     /**
+     * 开始建立到由给定地址标识的给定地址的套接字连接
      * Begin establishing a socket connection to the given address identified by the given address
      * @param id The id for this connection
      * @param address The address to connect to
@@ -44,6 +46,7 @@ public interface Selectable {
     void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException;
 
     /**
+     * 唤醒这个selector如果它阻塞在I/O
      * Wakeup this selector if it is blocked on I/O
      */
     void wakeup();
@@ -59,12 +62,14 @@ public interface Selectable {
     void close(String id);
 
     /**
+     * 把这个请求send放入Queue队列，在之后的poll方法调用时会发送这个send
      * Queue the given request for sending in the subsequent {@link #poll(long) poll()} calls
      * @param send The request to send
      */
     void send(Send send);
 
     /**
+     * 做io操作。读、写、连接建立等。
      * Do I/O. Reads, writes, connection establishment, etc.
      * @param timeout The amount of time to block if there is nothing to do
      * @throws IOException
@@ -72,11 +77,15 @@ public interface Selectable {
     void poll(long timeout) throws IOException;
 
     /**
+     * 完成的sends
+     * 客户端轮训这个处理
      * The list of sends that completed on the last {@link #poll(long) poll()} call.
      */
     List<Send> completedSends();
 
     /**
+     * 完成的网络接收NetworkReceive
+     * 客户端轮训这个处理
      * The collection of receives that completed on the last {@link #poll(long) poll()} call.
      */
     Collection<NetworkReceive> completedReceives();
@@ -94,12 +103,23 @@ public interface Selectable {
     List<String> connected();
 
     /**
+     * 停止从给定连接读操作。mute: /mjuːt/ 沉默
      * Disable reads from the given connection
      * @param id The id for the connection
      */
     void mute(String id);
 
     /**
+     * 重新启用从给定连接读操作
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
      * Re-enable reads from the given connection
      * @param id The id for the connection
      */
