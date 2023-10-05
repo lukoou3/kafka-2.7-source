@@ -63,6 +63,7 @@ import java.util.Objects;
 import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 
 /**
+ * 处理向Kafka集群发送生产请求的后台线程。该线程发出元数据请求以更新其集群视图，然后向适当的节点发送生产请求。
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
  * requests to renew its view of the cluster and then sends produce requests to the appropriate nodes.
  */
@@ -325,7 +326,7 @@ public class Sender implements Runnable {
         long currentTimeMs = time.milliseconds();
         // 核心逻辑，发送生产数据
         long pollTimeout = sendProducerData(currentTimeMs);
-        // 核心逻辑，拉取元数据
+        // 核心逻辑，实际发送读取io。生产写入、响应读取、拉取元数据等
         client.poll(pollTimeout, currentTimeMs);
     }
 

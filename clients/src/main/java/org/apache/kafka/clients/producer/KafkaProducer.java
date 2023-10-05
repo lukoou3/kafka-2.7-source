@@ -784,6 +784,32 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * 异步发送一个消息:
+     *    先经过拦截器处理(忽略)
+     *    同步等待包含给定主题群集的元数据可用
+     *    key, value 转换为 byte[], 获取分区(没设置使用分区器分区)
+     *    计算serializedSize, 校验，不能大于 max.request.size 或者 buffer.memory
+     *    绑定回调函数，异步方式发送
+     *    消息添加到accumulator(32M的内存)返回batch result
+     *    如果accumulator的batch满了或者新建一个batch，唤醒sender线程发送数据
+     *
+     * 生产者什么何时发送生产请求? org.apache.kafka.clients.producer.internals.Sender
+     * 查看Sender后台线程的run方法 => 核心逻辑 runOnce():
+     *    runOnce方法主要做两个操作：发送生产数据(sendProducerData), 拉取元数据(client.poll 实际发送读取io。生产写入、响应读取、拉取元数据等)
+     *    sendProducerData:
+     *        获取要发送数据的分区。获取已准备好发送分区的节点列表：1、满一个批次； 2、经过lingerMs时长
+     *        同个broker的List<ProducerBatch>合并到一起发送, 这么做是提高网络效率
+     *        发送生产数据请求，并且注册响应的处理callback
+     *        发送生产数据请求就是调用client.send，这还是个异步操作，
+     *        selector.send(send) 发送请求到selector，实际仅仅是设置send，下次poll时发送send
+     *        selector.setSend(send) 添加可写事件监控，下次poll方法中发送网络请求
+     *    client.poll:
+     *        检查发送元数据请求
+     *        selector.poll 做io操作。读、写、连接建立等。
+     *        nioSelector.selectedKeys() 获取监控触发事件，处理io操作
+     *        key.isReadable()  读数据 解析响应
+     *        key.isWritable()  写数据 发送请求
+     *
      * Asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
      * See {@link #send(ProducerRecord, Callback)} for details.
      */
