@@ -63,6 +63,7 @@ public abstract class BufferSupplier implements AutoCloseable {
      */
     public abstract void close();
 
+    // 这个类哪里有使用呢，相当于ByteBuffer pool
     private static class DefaultSupplier extends BufferSupplier {
         // We currently use a single block size, so optimise for that case
         private final Map<Integer, Deque<ByteBuffer>> bufferMap = new HashMap<>(1);

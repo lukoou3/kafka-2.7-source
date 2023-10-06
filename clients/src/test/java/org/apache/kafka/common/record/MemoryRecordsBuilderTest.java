@@ -46,6 +46,19 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
+/**
+ * @RunWith(value = Parameterized.class)每个测试函数会按照需要传入的参数数组测试
+ * 看Parameterized的注释可知传入参数是data()返回数据
+ * 可以看到是测试bufferOffset是(0, 15)， 以及所有的压缩类型(5种类型)，总共10中类型
+ *     @Parameterized.Parameters(name = "bufferOffset={0}, compression={1}")
+ *     public static Collection<Object[]> data() {
+ *         List<Object[]> values = new ArrayList<>();
+ *         for (int bufferOffset : Arrays.asList(0, 15))
+ *             for (CompressionType compressionType : CompressionType.values())
+ *                 values.add(new Object[] {bufferOffset, compressionType});
+ *         return values;
+ *     }
+ */
 @RunWith(value = Parameterized.class)
 public class MemoryRecordsBuilderTest {
     private final CompressionType compressionType;
@@ -301,17 +314,21 @@ public class MemoryRecordsBuilderTest {
         }
     }
 
+    // 这个就是生产消息写入RecordBatch的过程
     @Test
     public void testEstimatedSizeInBytes() {
+        // RecordBatch buffer大小
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        buffer.position(bufferOffset);
+        buffer.position(bufferOffset); // bufferOffset是多少
 
+        // CURRENT_MAGIC_VALUE = MAGIC_VALUE_V2; 当前版本是版本2
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType,
                 TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
                 false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
 
         int previousEstimate = 0;
         for (int i = 0; i < 10; i++) {
+            // 模拟生产消息
             builder.append(new SimpleRecord(i, ("" + i).getBytes()));
             int currentEstimate = builder.estimatedSizeInBytes();
             assertTrue(currentEstimate > previousEstimate);

@@ -255,9 +255,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return buffer.getInt(PARTITION_LEADER_EPOCH_OFFSET);
     }
 
+    // 压缩迭代器
     private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier, boolean skipKeyValue) {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
+        // 解压缩流,
+        // org.apache.kafka.common.record.KafkaLZ4BlockInputStream
+        // org.xerial.snappy.SnappyInputStream
         final DataInputStream inputStream = new DataInputStream(compressionType().wrapForInput(buffer, magic(),
             bufferSupplier));
 
@@ -283,11 +287,12 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     private CloseableIterator<Record> uncompressedIterator() {
         final ByteBuffer buffer = this.buffer.duplicate();
-        buffer.position(RECORDS_OFFSET);
+        buffer.position(RECORDS_OFFSET); // 跳过header
         return new RecordIterator() {
             @Override
             protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
                 try {
+                    // 读取一条Record
                     return DefaultRecord.readFrom(buffer, baseOffset, firstTimestamp, baseSequence, logAppendTime);
                 } catch (BufferUnderflowException e) {
                     throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
@@ -302,17 +307,26 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         };
     }
 
+    /**
+     * header是没压缩的, 压缩的records，看看kafka是怎么处理迭代返回record的
+     *
+     */
     @Override
     public Iterator<Record> iterator() {
+        // 获取record count
         if (count() == 0)
             return Collections.emptyIterator();
 
+        // 没有压缩
         if (!isCompressed())
             return uncompressedIterator();
 
+        // 对于普通迭代器，我们不能确保底层压缩流是关闭的，所以我们在这里解压缩完整的记录集。
+        // 要求降低内存占用的用例可以使用“streamingIterator”，但代价是增加复杂性
         // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
         // so we decompress the full record set here. Use cases which call for a lower memory footprint
         // can use `streamingIterator` at the cost of additional complexity
+        // 压缩迭代器
         try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING, false)) {
             List<Record> records = new ArrayList<>(count());
             while (iterator.hasNext())
@@ -559,11 +573,12 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         private int readRecords = 0;
 
         RecordIterator() {
+            // 这些都是能从header中直接读取的
             this.logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
             this.baseOffset = baseOffset();
             this.firstTimestamp = firstTimestamp();
             this.baseSequence = baseSequence();
-            int numRecords = count();
+            int numRecords = count(); // record count
             if (numRecords < 0)
                 throw new InvalidRecordException("Found invalid record count " + numRecords + " in magic v" +
                         magic() + " batch");
@@ -572,6 +587,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         @Override
         public boolean hasNext() {
+            // 没有读完
             return readRecords < numRecords;
         }
 
@@ -607,7 +623,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         private final DataInputStream inputStream;
 
         StreamRecordIterator(DataInputStream inputStream) {
-            super();
+            super(); //header 内容是可以直接从原始buffer读取的
             this.inputStream = inputStream;
         }
 

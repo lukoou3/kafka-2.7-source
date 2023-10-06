@@ -41,10 +41,12 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
     public MutableRecordBatch nextBatch() {
         int remaining = buffer.remaining();
 
+        // 验证下一个批次的标头并返回批次字节大小。
         Integer batchSize = nextBatchSize();
         if (batchSize == null || remaining < batchSize)
             return null;
 
+        // 获取版本
         byte magic = buffer.get(buffer.position() + MAGIC_OFFSET);
 
         ByteBuffer batchSlice = buffer.slice();
@@ -52,12 +54,14 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
         buffer.position(buffer.position() + batchSize);
 
         if (magic > RecordBatch.MAGIC_VALUE_V1)
+            // 返回DefaultRecordBatch
             return new DefaultRecordBatch(batchSlice);
         else
             return new AbstractLegacyRecordBatch.ByteBufferLegacyRecordBatch(batchSlice);
     }
 
     /**
+     * 验证下一个批次的标头并返回批次字节大小。
      * Validates the header of the next batch and returns batch size.
      * @return next batch size including LOG_OVERHEAD if buffer contains header up to
      *         magic byte, null otherwise

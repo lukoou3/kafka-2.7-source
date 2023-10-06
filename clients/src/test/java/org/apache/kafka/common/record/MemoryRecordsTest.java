@@ -72,6 +72,15 @@ public class MemoryRecordsTest {
         }
     }
 
+    /**
+     * 迭代消息
+     * 从输出可以看出magic < 2没压缩时，每个RecordBatch仅仅包含1条记录
+     * 从这里看出magic v2还是优化了不少的
+     * 这样看来v2版本又节省了很多空间，因为它将多个消息(Record)打包存放到单个RecordBatch中，又通过Varints编码极大地节省了空间
+     *    Kafka消息格式的第一个版本通常称为v0版本，在Kafka 0.10.0之前都采用的这个消息格式
+     *    Kafka从0.10.0版本开始到0.11.0版本之前所使用的消息格式版本为v1
+     *    Kafka从0.11.0版本开始所使用的消息格式版本为v2，这个版本的消息相比v0和v1的版本而言改动很大，同时还参考了Protocol Buffer而引入了变长整型(Varints)和ZigZag编码。
+     */
     @Test
     public void testIterator() {
         assumeAtLeastV2OrNotZstd();
@@ -98,6 +107,7 @@ public class MemoryRecordsTest {
         for (int iteration = 0; iteration < 2; iteration++) {
             int total = 0;
             for (RecordBatch batch : memoryRecords.batches()) {
+                System.out.println(String.format("magic:%d, compression:%s, iteration:%d, total:%d", magic, compression, iteration, total));
                 assertTrue(batch.isValid());
                 assertEquals(compression, batch.compressionType());
                 assertEquals(firstOffset + total, batch.baseOffset());

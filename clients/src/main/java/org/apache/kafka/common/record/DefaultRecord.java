@@ -299,7 +299,9 @@ public class DefaultRecord implements Record {
                                          long baseTimestamp,
                                          int baseSequence,
                                          Long logAppendTime) throws IOException {
+        // Record 大小
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
+        // Record 内容, 解压后的内容
         ByteBuffer recordBuffer = ByteBuffer.allocate(sizeOfBodyInBytes);
         input.readFully(recordBuffer.array(), 0, sizeOfBodyInBytes);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
@@ -312,6 +314,7 @@ public class DefaultRecord implements Record {
                                          long baseTimestamp,
                                          int baseSequence,
                                          Long logAppendTime) {
+        // Record 大小
         int sizeOfBodyInBytes = ByteUtils.readVarint(buffer);
         if (buffer.remaining() < sizeOfBodyInBytes)
             return null;
