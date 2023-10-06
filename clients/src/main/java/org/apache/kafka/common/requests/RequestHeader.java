@@ -29,8 +29,8 @@ import java.nio.ByteBuffer;
  * The header for a request in the Kafka protocol
  */
 public class RequestHeader implements AbstractRequestResponse {
-    private final RequestHeaderData data;
-    private final short headerVersion;
+    private final RequestHeaderData data; // 区分版本
+    private final short headerVersion; //根据headerVersion解析RequestHeaderData
 
     public RequestHeader(Struct struct, short headerVersion) {
         this(new RequestHeaderData(struct, headerVersion), headerVersion);
@@ -86,10 +86,11 @@ public class RequestHeader implements AbstractRequestResponse {
     public static RequestHeader parse(ByteBuffer buffer) {
         short apiKey = -1;
         try {
+            // 先解析版本
             apiKey = buffer.getShort();
             short apiVersion = buffer.getShort();
             short headerVersion = ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion);
-            buffer.rewind();
+            buffer.rewind(); // 重置位置，下面构造RequestHeader会完成读取header
             return new RequestHeader(new RequestHeaderData(
                 new ByteBufferAccessor(buffer), headerVersion), headerVersion);
         } catch (UnsupportedVersionException e) {

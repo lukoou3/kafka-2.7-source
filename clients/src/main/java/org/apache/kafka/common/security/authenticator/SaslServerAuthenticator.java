@@ -477,6 +477,7 @@ public class SaslServerAuthenticator implements Authenticator {
         boolean isKafkaRequest = false;
         String clientMechanism = null;
         try {
+            // 反序列化Request。先解析header，然后根据apiKey、apiVersion、然后就能解析出具体的Request
             ByteBuffer requestBuffer = ByteBuffer.wrap(requestBytes);
             RequestHeader header = RequestHeader.parse(requestBuffer);
             ApiKeys apiKey = header.apiKey();
@@ -497,6 +498,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
             RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
                     KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY);
+            // 解析Request, 前面已从requestBuffer读取了header
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey == ApiKeys.API_VERSIONS)
                 handleApiVersionsRequest(requestContext, (ApiVersionsRequest) requestAndSize.request);

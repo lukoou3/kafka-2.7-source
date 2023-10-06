@@ -57,6 +57,7 @@ public class RequestContext implements AuthorizableRequestContext {
         this.clientInformation = clientInformation;
     }
 
+    // 反序列化请求：先解析版本apiKey、apiVersion、然后就能解析出具体的Request
     public RequestAndSize parseRequest(ByteBuffer buffer) {
         if (isUnsupportedApiVersionsRequest()) {
             // Unsupported ApiVersion requests are treated as v0 requests and are not parsed

@@ -27,10 +27,10 @@ import java.util.Objects;
 public class Schema extends Type {
     private final static Object[] NO_VALUES = new Object[0];
 
-    private final BoundField[] fields;
-    private final Map<String, BoundField> fieldsByName;
-    private final boolean tolerateMissingFieldsWithDefaults;
-    private final Struct cachedStruct;
+    private final BoundField[] fields; // 按照index检索Field
+    private final Map<String, BoundField> fieldsByName; // 按照name检索Field
+    private final boolean tolerateMissingFieldsWithDefaults; // 是否允许在结尾缺省值(有默认值)
+    private final Struct cachedStruct; // 空schema，仅仅标记类型，这样的struct为固定值
 
     /**
      * Construct the schema with a given list of its field values
@@ -46,6 +46,8 @@ public class Schema extends Type {
     /**
      * Construct the schema with a given list of its field values and the ability to tolerate
      * missing optional fields with defaults at the end of the schema definition.
+     *
+     * @param tolerateMissingFieldsWithDefaults 是否允许在结尾缺省值(有默认值)
      *
      * @param tolerateMissingFieldsWithDefaults whether to accept records with missing optional
      * fields the end of the schema
@@ -64,12 +66,14 @@ public class Schema extends Type {
             this.fields[i] = new BoundField(def, this, i);
             this.fieldsByName.put(def.name, this.fields[i]);
         }
+        // 有些schema没有实际的字段，仅仅标记类型，这样的struct为固定值
         //6 schemas have no fields at the time of this writing (3 versions each of list_groups and api_versions)
         //for such schemas there's no point in even creating a unique Struct object when deserializing.
         this.cachedStruct = this.fields.length > 0 ? null : new Struct(this, NO_VALUES);
     }
 
     /**
+     * 序列化struct
      * Write a struct to the buffer
      */
     @Override
@@ -87,6 +91,7 @@ public class Schema extends Type {
     }
 
     /**
+     * 反序列化struct
      * Read a struct from the buffer. If this schema is configured to tolerate missing
      * optional fields at the end of the buffer, these fields are replaced with their default
      * values; otherwise, if the schema does not tolerate missing fields, or if missing fields
@@ -122,6 +127,7 @@ public class Schema extends Type {
     }
 
     /**
+     * struct的size
      * The size of the given record
      */
     @Override
@@ -140,6 +146,7 @@ public class Schema extends Type {
     }
 
     /**
+     * 属性数量
      * The number of fields in this schema
      */
     public int numFields() {
@@ -147,6 +154,7 @@ public class Schema extends Type {
     }
 
     /**
+     * 按照index检索Field
      * Get a field by its slot in the record array
      *
      * @param slot The slot at which this field sits
@@ -157,6 +165,7 @@ public class Schema extends Type {
     }
 
     /**
+     * 按照name检索Field
      * Get a field by its name
      *
      * @param name The name of the field

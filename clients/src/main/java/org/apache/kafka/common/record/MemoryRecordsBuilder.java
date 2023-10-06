@@ -127,20 +127,29 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.writeLimit = writeLimit;
         this.initialPosition = bufferStream.position();
+        // Record Batch Header部分
         this.batchHeaderSizeInBytes = AbstractRecords.recordBatchHeaderSizeInBytes(magic, compressionType);
 
+        // 空出部分
         bufferStream.position(initialPosition + batchHeaderSizeInBytes);
         this.bufferStream = bufferStream;
         this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
     }
 
     /**
+     * MemoryRecordsBuilder构造函数
      * Construct a new builder.
      *
      * @param buffer The underlying buffer to use (note that this class will allocate a new buffer if necessary
      *               to fit the records appended)
+     *               要使用的底层缓冲区（请注意，如果需要，此类将分配一个新的缓冲区以适应附加的记录）
+     *               压缩流都支持动态扩展底层buffer吗？new ByteBufferOutputStream(buffer)支持吗
+     *               org.apache.kafka.common.utils.ByteBufferOutputStream 确实会动态扩展底层buffer，每次写入数据会调用ensureRemaining方法
+     *
      * @param magic The magic value to use
-     * @param compressionType The compression codec to use
+     * @param compressionType The compression codec to use 压缩类型, 使用压缩流包装写入流
+     *                        org.xerial.snappy.SnappyOutputStream
+     *                        org.apache.kafka.common.record.KafkaLZ4BlockOutputStream
      * @param timestampType The desired timestamp type. For magic > 0, this cannot be {@link TimestampType#NO_TIMESTAMP_TYPE}.
      * @param baseOffset The initial offset to use for
      * @param logAppendTime The log append time of this record set. Can be set to NO_TIMESTAMP if CREATE_TIME is used.
@@ -153,6 +162,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * @param writeLimit The desired limit on the total bytes for this record set (note that this can be exceeded
      *                   when compression is used since size estimates are rough, and in the case that the first
      *                   record added exceeds the size).
+     *                   默认就是buffer的大小
+     *                   此记录集的总字节的所需限制（请注意，由于大小估计是粗略的，并且在添加的第一个记录超过大小的情况下，使用压缩时可能会超过此限制）。
      */
     public MemoryRecordsBuilder(ByteBuffer buffer,
                                 byte magic,
@@ -321,12 +332,19 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             builtRecords = MemoryRecords.EMPTY;
         } else {
             if (magic > RecordBatch.MAGIC_VALUE_V1)
+                // 写入BatchHeader
                 this.actualCompressionRatio = (float) writeDefaultBatchHeader() / this.uncompressedRecordsSizeInBytes;
             else if (compressionType != CompressionType.NONE)
                 this.actualCompressionRatio = (float) writeLegacyCompressedWrapperHeader() / this.uncompressedRecordsSizeInBytes;
 
             ByteBuffer buffer = buffer().duplicate();
             buffer.flip();
+            /**
+             * 这里是干什么, 难道客户端写入MemoryRecords不包含头信息吗?看看服务端KafkaApis怎么处理的
+             * 服务端解析Request：org.apache.kafka.common.requests.RequestContext.parseRequest
+             * 上面看错了，这个没问题，因为初始化时，把位置定位到数据内容部分了，initialPosition是传入buffer的position，batchHeaderSizeInBytes是header的内容
+             * bufferStream.position(initialPosition + batchHeaderSizeInBytes);
+             */
             buffer.position(initialPosition);
             builtRecords = MemoryRecords.readableRecords(buffer.slice());
         }
@@ -367,6 +385,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         else
             maxTimestamp = this.maxTimestamp;
 
+        // 写入header
         DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
                 firstTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
                 partitionLeaderEpoch, numRecords);
@@ -419,6 +438,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                 firstTimestamp = timestamp;
 
             if (magic > RecordBatch.MAGIC_VALUE_V1) {
+                // 写入buffer
                 appendDefaultRecord(offset, timestamp, key, value, headers);
                 return null;
             } else {
@@ -527,6 +547,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
     public Long append(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
+        // 分配offset
         return appendWithOffset(nextSequentialOffset(), timestamp, key, value, headers);
     }
 
@@ -691,12 +712,17 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         appendWithOffset(nextSequentialOffset(), record);
     }
 
+    // 写入buffer 核心逻辑
     private void appendDefaultRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value,
                                      Header[] headers) throws IOException {
         ensureOpenForRecordAppend();
-        int offsetDelta = (int) (offset - baseOffset);
+        int offsetDelta = (int) (offset - baseOffset); // 写入的是offset - baseOffset
         long timestampDelta = timestamp - firstTimestamp;
+        // 数据写入appendStream，返回写入大小
+        // 传入key，value是没压缩的，压缩消息集合，不会每条消息单独压缩
+        // appendStream是对bufferStream的压缩包装，bufferStream是对buffer的包装
         int sizeInBytes = DefaultRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value, headers);
+        // 更新记录数，字节数等大小
         recordWritten(offset, timestamp, sizeInBytes);
     }
 
@@ -752,6 +778,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
+     * 获取写入字节数的估计值（基于CompressionType中硬编码的估计因子。
      * Get an estimate of the number of bytes written (based on the estimation factor hard-coded in {@link CompressionType}.
      * @return The estimated number of bytes written
      */
@@ -759,6 +786,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         if (compressionType == CompressionType.NONE) {
             return batchHeaderSizeInBytes + uncompressedRecordsSizeInBytes;
         } else {
+            // 基于未压缩的写入字节估计写入底层字节缓冲区的字节
             // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
             return batchHeaderSizeInBytes + (int) (uncompressedRecordsSizeInBytes * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
         }
@@ -772,6 +800,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
+     * 检查我们是否有空间容纳包含给定键/值对的新记录。如果没有附加任何记录，则返回true。
      * Check if we have room for a new record containing the given key/value pair. If no records have been
      * appended, then this returns true.
      */
@@ -782,6 +811,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     /**
      * Check if we have room for a new record containing the given key/value pair. If no records have been
      * appended, then this returns true.
+     *
+     * 请注意，返回值是基于写入压缩器的字节的估计值，如果使用压缩，这可能不准确。当这种情况发生时，下面的追加可能会导致底层字节缓冲区流中的动态缓冲区重新分配。
      *
      * Note that the return value is based on the estimate of the bytes written to the compressor, which may not be
      * accurate if compression is used. When this happens, the following append may cause dynamic buffer
@@ -804,6 +835,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, headers);
         }
 
+        // 要保守，不要考虑压缩新记录。estimatedBytesWritten()返回写入的数据的内存估计
         // Be conservative and not take compression of the new record into consideration.
         return this.writeLimit >= estimatedBytesWritten() + recordSize;
     }

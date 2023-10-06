@@ -234,7 +234,7 @@ public final class RecordAccumulator {
                     return appendResult;
                 }
 
-                // buffer构造批次
+                // buffer构造批次, 写入recordsBuilder就是写入buffer, 并且会安装压缩参数压缩写入数据
                 MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
                 ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, nowMs);
                 // 往批次里写数据
@@ -263,6 +263,7 @@ public final class RecordAccumulator {
             throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
                 "support the required message format (v2). The broker must be version 0.11 or later.");
         }
+        // baseOffset = 1
         return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
     }
 
@@ -557,10 +558,12 @@ public final class RecordAccumulator {
 
     private List<ProducerBatch> drainBatchesForOneNode(Cluster cluster, Node node, int maxSize, long now) {
         int size = 0;
-        List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
-        List<ProducerBatch> ready = new ArrayList<>();
+        List<PartitionInfo> parts = cluster.partitionsForNode(node.id()); // 此node的分区
+        List<ProducerBatch> ready = new ArrayList<>(); // 要返回此node的List<ProducerBatch>
+        // 为了减少饥饿的可能性，此循环不从0开始
         /* to make starvation less likely this loop doesn't start at 0 */
-        int start = drainIndex = drainIndex % parts.size();
+        int start = drainIndex = drainIndex % parts.size(); //循环开始的索引，用以判断循环结束
+        // 循环此node所有的分区
         do {
             PartitionInfo part = parts.get(drainIndex);
             TopicPartition tp = new TopicPartition(part.topic(), part.partition());
@@ -570,18 +573,21 @@ public final class RecordAccumulator {
             if (isMuted(tp))
                 continue;
 
+            // 此分区的ProducerBatch Deque
             Deque<ProducerBatch> deque = getDeque(tp);
             if (deque == null)
                 continue;
 
             synchronized (deque) {
                 // invariant: !isMuted(tp,now) && deque != null
+                // 返回但不删除头元素
                 ProducerBatch first = deque.peekFirst();
                 if (first == null)
                     continue;
 
                 // first != null
                 boolean backoff = first.attempts() > 0 && first.waitedTimeMs(now) < retryBackoffMs;
+                // 不处理处以backoff周期的ProducerBatch
                 // Only drain the batch if it is not during backoff period.
                 if (backoff)
                     continue;
@@ -597,6 +603,7 @@ public final class RecordAccumulator {
                     boolean isTransactional = transactionManager != null && transactionManager.isTransactional();
                     ProducerIdAndEpoch producerIdAndEpoch =
                         transactionManager != null ? transactionManager.producerIdAndEpoch() : null;
+                    // 返回并删除头元素
                     ProducerBatch batch = deque.pollFirst();
                     if (producerIdAndEpoch != null && !batch.hasSequence()) {
                         // If the the producer id/epoch of the partition do not match the latest one
@@ -623,7 +630,7 @@ public final class RecordAccumulator {
                     }
                     batch.close();
                     size += batch.records().sizeInBytes();
-                    ready.add(batch);
+                    ready.add(batch); // 添加此ProducerBatch
 
                     batch.drained(now);
                 }
@@ -633,6 +640,7 @@ public final class RecordAccumulator {
     }
 
     /**
+     * 把同一个node节点的ProducerBatch放到一起
      * Drain all the data for the given nodes and collate them into a list of batches that will fit within the specified
      * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
      *
@@ -648,6 +656,7 @@ public final class RecordAccumulator {
 
         Map<Integer, List<ProducerBatch>> batches = new HashMap<>();
         for (Node node : nodes) {
+            //  循环此node所有的分区, 每个分区只取头部ProducerBatch
             List<ProducerBatch> ready = drainBatchesForOneNode(cluster, node, maxSize, now);
             batches.put(node.id(), ready);
         }
@@ -691,6 +700,8 @@ public final class RecordAccumulator {
         // buffer pool.
         if (!batch.isSplitBatch())
             // 释放这个批次的内存
+            // 可以看到是引用的batch.buffer，不是MemoryRecordsBuilder，MemoryRecordsBuilder的注释：使用的底层缓冲区（请注意，如果需要，此类将分配一个新的缓冲区以适应附加的记录）
+            // MemoryRecordsBuilder.hasRoomFor:返回值是基于写入压缩器的字节的估计值，如果使用压缩，这可能不准确。当这种情况发生时，下面的追加可能会导致底层字节缓冲区流中的动态缓冲区重新分配。
             free.deallocate(batch.buffer(), batch.initialCapacity());
     }
 

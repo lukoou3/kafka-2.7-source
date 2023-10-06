@@ -272,35 +272,37 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     /**
+     * ProduceRequest请求体转为Struct
      * Visible for testing.
      */
     @Override
     public Struct toStruct() {
         // Store it in a local variable to protect against concurrent updates
         Map<TopicPartition, MemoryRecords> partitionRecords = partitionRecordsOrFail();
-        short version = version();
+        short version = version(); // 版本
         Struct struct = new Struct(ApiKeys.PRODUCE.requestSchema(version));
         Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupPartitionDataByTopic(partitionRecords);
-        struct.set(ACKS_KEY_NAME, acks);
-        struct.set(TIMEOUT_KEY_NAME, timeout);
-        struct.setIfExists(NULLABLE_TRANSACTIONAL_ID, transactionalId);
+        struct.set(ACKS_KEY_NAME, acks); // acks
+        struct.set(TIMEOUT_KEY_NAME, timeout); // timeout
+        struct.setIfExists(NULLABLE_TRANSACTIONAL_ID, transactionalId); // transactional_id
 
         List<Struct> topicDatas = new ArrayList<>(recordsByTopic.size());
         for (Map.Entry<String, Map<Integer, MemoryRecords>> topicEntry : recordsByTopic.entrySet()) {
-            Struct topicData = struct.instance(TOPIC_DATA_KEY_NAME);
-            topicData.set(TOPIC_NAME, topicEntry.getKey());
+            Struct topicData = struct.instance(TOPIC_DATA_KEY_NAME); // 根据属性创建Struct
+            topicData.set(TOPIC_NAME, topicEntry.getKey()); // topic_name
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, MemoryRecords> partitionEntry : topicEntry.getValue().entrySet()) {
+                // record写入batch，输出MemoryRecords逻辑在MemoryRecordsBuilder类中
                 MemoryRecords records = partitionEntry.getValue();
                 Struct part = topicData.instance(PARTITION_DATA_KEY_NAME)
                         .set(PARTITION_ID, partitionEntry.getKey())
-                        .set(RECORD_SET_KEY_NAME, records);
+                        .set(RECORD_SET_KEY_NAME, records); // 看做NULLABLE_BYTES类型
                 partitionArray.add(part);
             }
-            topicData.set(PARTITION_DATA_KEY_NAME, partitionArray.toArray());
+            topicData.set(PARTITION_DATA_KEY_NAME, partitionArray.toArray()); // topic分区数组
             topicDatas.add(topicData);
         }
-        struct.set(TOPIC_DATA_KEY_NAME, topicDatas.toArray());
+        struct.set(TOPIC_DATA_KEY_NAME, topicDatas.toArray()); // topic_data
         return struct;
     }
 

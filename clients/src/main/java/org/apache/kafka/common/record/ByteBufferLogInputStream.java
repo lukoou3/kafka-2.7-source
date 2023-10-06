@@ -67,6 +67,7 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
         int remaining = buffer.remaining();
         if (remaining < LOG_OVERHEAD)
             return null;
+        // 一个Record Batch length(length字段后内容大小)
         int recordSize = buffer.getInt(buffer.position() + SIZE_OFFSET);
         // V0 has the smallest overhead, stricter checking is done later
         if (recordSize < LegacyRecord.RECORD_OVERHEAD_V0)
@@ -83,6 +84,7 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
         if (magic < 0 || magic > RecordBatch.CURRENT_MAGIC_VALUE)
             throw new CorruptRecordException("Invalid magic found in record: " + magic);
 
+        // 整个Record Batch的大小：offset(8) + length(4) + size
         return recordSize + LOG_OVERHEAD;
     }
 }

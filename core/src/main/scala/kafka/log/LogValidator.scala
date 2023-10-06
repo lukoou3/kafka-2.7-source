@@ -279,6 +279,8 @@ private[log] object LogValidator extends Logging {
 
     val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
 
+    // 这个为啥有两层循环，似乎就算是一个Record Batch也可以调用此方法，就是循环一次而已。从buffer一个一个读
+    // 这个是兼容拉取等请求返回的数据吗，毕竟消费返回可能返回多个Record Batch
     records.batches.forEach { batch =>
       validateBatch(topicPartition, firstBatch, batch, origin, magic, brokerTopicStats)
 
@@ -289,6 +291,7 @@ private[log] object LogValidator extends Logging {
       // this is a hot path and we want to avoid any unnecessary allocations.
       var batchIndex = 0
       batch.forEach { record =>
+        // 验证
         validateRecord(batch, topicPartition, record, batchIndex, now, timestampType,
           timestampDiffMaxMs, compactedTopic, brokerTopicStats).foreach(recordError => recordErrors += recordError)
 
@@ -307,6 +310,7 @@ private[log] object LogValidator extends Logging {
         offsetOfMaxTimestamp = offsetOfMaxBatchTimestamp
       }
 
+      // 设置OFFSET
       batch.setLastOffset(offsetCounter.value - 1)
 
       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)

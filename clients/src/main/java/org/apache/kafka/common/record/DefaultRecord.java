@@ -174,6 +174,7 @@ public class DefaultRecord implements Record {
     }
 
     /**
+     * 写入buffer 核心逻辑
      * Write the record to `out` and return its size.
      */
     public static int writeTo(DataOutputStream out,
@@ -182,12 +183,17 @@ public class DefaultRecord implements Record {
                               ByteBuffer key,
                               ByteBuffer value,
                               Header[] headers) throws IOException {
+        // 计算需要写入的内存大小
         int sizeInBytes = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value, headers);
+        // 先写入长度，后写入内容
         ByteUtils.writeVarint(sizeInBytes, out);
 
+        // 没使用，占位符
         byte attributes = 0; // there are no used record attributes at the moment
         out.write(attributes);
 
+        // 下面写入各个字段
+        // 写入的record结构真的很巧妙，写入的是offsetDelta偏移量，这样在服务端就不用解析拆开MemoryRecords，不用更新每条record的offset，否则需要解压缩等性能肯定下降很多
         ByteUtils.writeVarlong(timestampDelta, out);
         ByteUtils.writeVarint(offsetDelta, out);
 

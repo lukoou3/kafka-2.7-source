@@ -95,6 +95,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     }
 
     public Send toSend(String destination, RequestHeader header) {
+        // serialize序列化成ByteBuffer
+        // Struct.writeTo(buffer)写入ByteBuffer
         return new NetworkSend(destination, serialize(header));
     }
 

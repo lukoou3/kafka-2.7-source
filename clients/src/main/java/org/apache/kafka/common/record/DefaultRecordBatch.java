@@ -463,21 +463,23 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         short attributes = computeAttributes(compressionType, timestampType, isTransactional, isControlBatch);
 
+        // 写入header
         int position = buffer.position();
-        buffer.putLong(position + BASE_OFFSET_OFFSET, baseOffset);
-        buffer.putInt(position + LENGTH_OFFSET, sizeInBytes - LOG_OVERHEAD);
-        buffer.putInt(position + PARTITION_LEADER_EPOCH_OFFSET, partitionLeaderEpoch);
-        buffer.put(position + MAGIC_OFFSET, magic);
-        buffer.putShort(position + ATTRIBUTES_OFFSET, attributes);
+        buffer.putLong(position + BASE_OFFSET_OFFSET, baseOffset); // offset: 0(8B)
+        buffer.putInt(position + LENGTH_OFFSET, sizeInBytes - LOG_OVERHEAD); // length: 8(4B)
+        buffer.putInt(position + PARTITION_LEADER_EPOCH_OFFSET, partitionLeaderEpoch); // partition leader epoch: 12(4B)
+        buffer.put(position + MAGIC_OFFSET, magic); // magic: 16(1B)
+        // 跳过crc，需要最后计算。crc: 17(4B)
+        buffer.putShort(position + ATTRIBUTES_OFFSET, attributes); // attributes: 21(2B)
         buffer.putLong(position + FIRST_TIMESTAMP_OFFSET, firstTimestamp);
         buffer.putLong(position + MAX_TIMESTAMP_OFFSET, maxTimestamp);
         buffer.putInt(position + LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta);
         buffer.putLong(position + PRODUCER_ID_OFFSET, producerId);
         buffer.putShort(position + PRODUCER_EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
-        buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords);
+        buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords); // records count: 57(4B)
         long crc = Crc32C.compute(buffer, ATTRIBUTES_OFFSET, sizeInBytes - ATTRIBUTES_OFFSET);
-        buffer.putInt(position + CRC_OFFSET, (int) crc);
+        buffer.putInt(position + CRC_OFFSET, (int) crc); // crc: 17(4B)
         buffer.position(position + RECORD_BATCH_OVERHEAD);
     }
 

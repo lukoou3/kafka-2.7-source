@@ -24,6 +24,11 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
+ * 可以根据预定义schema进行序列化和反序列化的record
+ * 这个Struct就类似spark sql的row，只要用于kafka内部网络通信的数据交互，Struct可以序列化或者反序列化实现和ByteBuffer的转换
+ * 两个属性schema和values 和spark sql 的 row类似
+ * Schema是Field数组，Field就是带属性名的Type，Type中定义了序列化或者反序列化的write，read方法。
+ * Type各种类型序列化实现符合预期，java各种框架基本一样：int32就是putInt，数组就是先写入长度后写入元素。
  * A record that can be serialized and deserialized according to a pre-defined schema
  */
 public class Struct {

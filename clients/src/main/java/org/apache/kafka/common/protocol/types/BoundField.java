@@ -17,6 +17,7 @@
 package org.apache.kafka.common.protocol.types;
 
 /**
+ * 绑定到特定schema的字段定义。
  * A field definition bound to a particular schema.
  */
 public class BoundField {

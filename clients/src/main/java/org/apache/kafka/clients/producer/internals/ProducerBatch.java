@@ -96,6 +96,8 @@ public final class ProducerBatch {
     }
 
     /**
+     * 添加record到buffer内存的方法：其实就是加到recordsBuilder里，之后会从recordsBuilder取出buffer
+     *
      * Append the record to the current record set and return the relative offset within that record set
      *
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
@@ -104,6 +106,7 @@ public final class ProducerBatch {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return null;
         } else {
+            // 添加record到buffer, 核心逻辑
             Long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
                     recordsBuilder.compressionType(), key, value, headers));

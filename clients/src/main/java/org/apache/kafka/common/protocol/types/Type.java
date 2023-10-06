@@ -31,6 +31,7 @@ import java.util.UUID;
 public abstract class Type {
 
     /**
+     * 序列化
      * Write the typed object to the buffer
      *
      * @throws SchemaException If the object is not valid for its type
@@ -38,6 +39,7 @@ public abstract class Type {
     public abstract void write(ByteBuffer buffer, Object o);
 
     /**
+     * 反序列化
      * Read the typed object from the buffer
      *
      * @throws SchemaException If the object is not valid for its type
@@ -45,6 +47,7 @@ public abstract class Type {
     public abstract Object read(ByteBuffer buffer);
 
     /**
+     * 校验类型值是否合法，校验成功返回值
      * Validate the object. If succeeded return its typed object.
      *
      * @throws SchemaException If validation failed
@@ -52,11 +55,13 @@ public abstract class Type {
     public abstract Object validate(Object o);
 
     /**
+     * 这个类型对应值的size，int32等类型是定长类型，string、array等类型需要计算
      * Return the size of the object in bytes
      */
     public abstract int sizeOf(Object o);
 
     /**
+     * 是否支持null值
      * Check if the type supports null values
      * @return whether or not null is a valid value for the type implementation
      */
@@ -65,6 +70,7 @@ public abstract class Type {
     }
 
     /**
+     * 如果是数组类型返回元素Type，否则返回空None
      * If the type is an array, return the type of the array elements.  Otherwise, return empty.
      */
     public Optional<Type> arrayElementType() {
@@ -72,6 +78,7 @@ public abstract class Type {
     }
 
     /**
+     * 是否是数组类型
      * Returns true if the type is an array.
      */
     public final boolean isArray() {
@@ -928,6 +935,7 @@ public abstract class Type {
         }
     };
 
+    // 看做NULLABLE_BYTES类型
     public static final DocumentedType RECORDS = new DocumentedType() {
         @Override
         public boolean isNullable() {

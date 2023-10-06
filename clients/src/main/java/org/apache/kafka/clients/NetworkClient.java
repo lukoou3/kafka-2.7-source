@@ -528,6 +528,9 @@ public class NetworkClient implements KafkaClient {
             log.debug("Sending {} request with header {} and timeout {} to node {}: {}",
                 clientRequest.apiKey(), header, clientRequest.requestTimeoutMs(), destination, request);
         }
+        // 这个send里只有header，body去哪了。里面有body，调用的是request方法，看 NetworkSend(destination, serialize(header)) 看serialize
+        // 调用的是serialize(Struct headerStruct, Struct bodyStruct), toStruct()是抽象方法由各个子类实现自己的body
+        // 怎么发送到网络的? KafkaChannel.write 方法 调用send.writeTo(transportLayer) 写入Channel
         Send send = request.toSend(destination, header);
         InFlightRequest inFlightRequest = new InFlightRequest(
                 clientRequest,

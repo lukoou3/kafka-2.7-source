@@ -26,8 +26,8 @@ import java.nio.ByteBuffer;
  * A response header in the kafka protocol.
  */
 public class ResponseHeader implements AbstractRequestResponse {
-    private final ResponseHeaderData data;
-    private final short headerVersion;
+    private final ResponseHeaderData data; // 区分版本
+    private final short headerVersion; //根据headerVersion解析ResponseHeaderData
 
     public ResponseHeader(Struct struct, short headerVersion) {
         this(new ResponseHeaderData(struct, headerVersion), headerVersion);

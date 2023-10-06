@@ -733,15 +733,19 @@ public class Sender implements Runnable {
     }
 
     /**
+     * 基于一个node的List<ProducerBatch>构造请求发送
      * Create a produce request from the given record batches
      */
     private void sendProduceRequest(long now, int destination, short acks, int timeout, List<ProducerBatch> batches) {
         if (batches.isEmpty())
             return;
 
+        // 按分区排列，毕竟服务端存储时也是按照分区处理的
         Map<TopicPartition, MemoryRecords> produceRecordsByPartition = new HashMap<>(batches.size());
+        // 这个是回调函数用的
         final Map<TopicPartition, ProducerBatch> recordsByPartition = new HashMap<>(batches.size());
 
+        // 这还找最小的版本号，难道一个程序的版本号不一样吗
         // find the minimum magic version used when creating the record sets
         byte minUsedMagic = apiVersions.maxUsableProduceMagic();
         for (ProducerBatch batch : batches) {
@@ -751,6 +755,9 @@ public class Sender implements Runnable {
 
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
+            // ProducerBatch是怎么转换成MemoryRecords的？
+            // ProducerBatch.tryAppend方法:添加record到buffer内存的方法：其实就是加到recordsBuilder里，之后会从recordsBuilder取出buffer
+            // batch.records()就是返回recordsBuilder.build()
             MemoryRecords records = batch.records();
 
             // down convert if necessary to the minimum magic used. In general, there can be a delay between the time
@@ -760,9 +767,10 @@ public class Sender implements Runnable {
             // client before sending. This is intended to handle edge cases around cluster upgrades where brokers may
             // not all support the same message format version. For example, if a partition migrates from a broker
             // which is supporting the new magic version to one which doesn't, then we will need to convert.
+            // 可能转换版本号
             if (!records.hasMatchingMagic(minUsedMagic))
                 records = batch.records().downConvert(minUsedMagic, 0, time).records();
-            produceRecordsByPartition.put(tp, records);
+            produceRecordsByPartition.put(tp, records); // 放入请求map
             recordsByPartition.put(tp, batch);
         }
 
@@ -770,6 +778,7 @@ public class Sender implements Runnable {
         if (transactionManager != null && transactionManager.isTransactional()) {
             transactionalId = transactionManager.transactionalId();
         }
+        // 构造请求
         ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forMagic(minUsedMagic, acks, timeout,
                 produceRecordsByPartition, transactionalId);
         RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, time.milliseconds());
@@ -778,6 +787,7 @@ public class Sender implements Runnable {
         // 发送生产数据请求，并且注册响应的处理callback
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
                 requestTimeoutMs, callback);
+        // 发送
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
     }

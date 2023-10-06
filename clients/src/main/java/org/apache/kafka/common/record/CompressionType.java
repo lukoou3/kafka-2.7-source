@@ -146,6 +146,7 @@ public enum CompressionType {
     }
 
     /**
+     * 使用OutputStream包装bufferStream，该OutputStream将使用此CompressionType压缩数据。
      * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.
      *
      * Note: Unlike {@link #wrapForInput}, {@link #wrapForOutput} cannot take {@link ByteBuffer}s directly.
