@@ -33,7 +33,7 @@ public class Microbenchmarks {
 
     public static void main(String[] args) throws Exception {
 
-        final int iters = Integer.parseInt(args[0]);
+        final int iters = args.length > 0 ?Integer.parseInt(args[0]):10000000;
         double x = 0.0;
         long start = System.nanoTime();
         for (int i = 0; i < iters; i++)

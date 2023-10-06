@@ -24,6 +24,20 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
 /**
+ * 一个简单的读优化映射实现，只同步写入并在每次修改时进行完整复制
+ * 这个适用于什么场景呢?
+ * 缓存内存结构 ConcurrentHashMap<TopicPartition, Deque<RecordBatch>> batches = new CopyOnWriteMap<>()
+ * volatile Map<K,V> map，通过volatile线程安全的不上锁读，读性能很好
+ * map写方法加了synchronized锁，方法内new新map内存空间，新map内写数据，然后新map直接覆盖
+ * 写流程在新内存中，通过开辟新内存空间实现读写分离
+ *
+ * 该场景如果少读多写，性能很差。适合多读少写场景
+ *
+ * JUC只有CopyOnWriteArrayList，kafka自己设计了CopyOnWriteMap来提高缓存并发性能，面对多读少写
+ * 假设一个topic 100个分区，每秒写入一万的消息，则缓存就是插入100次数据，每个队列只插入一次。但是每秒要读取一万次
+ * 因为会高频的读取出来一个TopicPartition对应的Deque数据结构，来对这个队列进行入队出队等操作
+ *
+ * 采用了读写分离的思想解决了线程安全且支持读多写少等问题。
  * A simple read-optimized map implementation that synchronizes only writes and does a full copy on each modification
  */
 public class CopyOnWriteMap<K, V> implements ConcurrentMap<K, V> {
