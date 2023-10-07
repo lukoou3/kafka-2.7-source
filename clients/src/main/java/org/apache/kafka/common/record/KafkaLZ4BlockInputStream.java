@@ -232,7 +232,12 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
         return decompressedBuffer.get() & 0xFF;
     }
 
-    // 读取数据
+    /**
+     * 读取数据
+     * 因为是从buffer中读取数据，可以读不够len，所以这个方法才返回读取的长度
+     * 这对解压缩没影响，kafka调用的是java.io.DataInputStream.readFully(byte[], int, int), 会一直读取到size，读不够size会报错EOFException
+     * 使用DataInputStream对这个流包装，调用DataInputStream.readFully读取所要的大小
+     */
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
         net.jpountz.util.SafeUtils.checkRange(b, off, len);

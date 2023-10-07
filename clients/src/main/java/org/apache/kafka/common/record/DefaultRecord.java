@@ -40,14 +40,14 @@ import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 /**
  * This class implements the inner record format for magic 2 and above. The schema is as follows:
  *
- *
+ * 可以看到Record的结构使用了比较多的Varint、Varlong，能减少不少字节大小
  * Record =>
  *   Length => Varint
  *   Attributes => Int8
  *   TimestampDelta => Varlong
  *   OffsetDelta => Varint
- *   Key => Bytes
- *   Value => Bytes
+ *   Key => Bytes (写入len用的varint)
+ *   Value => Bytes (写入len用的varint)
  *   Headers => [HeaderKey HeaderValue]
  *     HeaderKey => String
  *     HeaderValue => Bytes
@@ -303,6 +303,8 @@ public class DefaultRecord implements Record {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         // Record 内容, 解压后的内容
         ByteBuffer recordBuffer = ByteBuffer.allocate(sizeOfBodyInBytes);
+        // 解压缩时可以读取完整, java.io.DataInputStream.readFully(byte[], int, int), 会一直读取到size，读不够size会报错EOFException
+        // 不能调用java.io.DataInputStream.read(byte[], int, int), 可能一次解压缩不够大小
         input.readFully(recordBuffer.array(), 0, sizeOfBodyInBytes);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
         return readFrom(recordBuffer, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
@@ -324,6 +326,7 @@ public class DefaultRecord implements Record {
                 baseSequence, logAppendTime);
     }
 
+    // 反序列化
     private static DefaultRecord readFrom(ByteBuffer buffer,
                                           int sizeInBytes,
                                           int sizeOfBodyInBytes,
@@ -345,6 +348,7 @@ public class DefaultRecord implements Record {
                     DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
                     RecordBatch.NO_SEQUENCE;
 
+            // key value 存储bytes数据格式len是用Varint, COMPACT_NULLABLE_BYTES是int size = ByteUtils.readUnsignedVarint(buffer) - 1;
             ByteBuffer key = null;
             int keySize = ByteUtils.readVarint(buffer);
             if (keySize >= 0) {

@@ -936,6 +936,7 @@ public abstract class Type {
     };
 
     // 看做NULLABLE_BYTES类型
+    // 具体字段以及序列化反序列化：org.apache.kafka.common.record.DefaultRecord
     public static final DocumentedType RECORDS = new DocumentedType() {
         @Override
         public boolean isNullable() {

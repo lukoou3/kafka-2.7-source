@@ -25,6 +25,7 @@ import java.nio.ByteBuffer;
 
 /**
  * This classes exposes low-level methods for reading/writing from byte streams or buffers.
+ * 这个类暴露低水平的方法用于从byte streams or buffers读取/写入
  */
 public final class ByteUtils {
 
@@ -33,6 +34,7 @@ public final class ByteUtils {
     private ByteUtils() {}
 
     /**
+     * 读取uint32, buffer position增加4
      * Read an unsigned integer from the current position in the buffer, incrementing the position by 4 bytes
      *
      * @param buffer The buffer to read from
@@ -43,6 +45,7 @@ public final class ByteUtils {
     }
 
     /**
+     * 从position读取uint32, 不改变buffer position
      * Read an unsigned integer from the given position without modifying the buffers position
      *
      * @param buffer the buffer to read from
@@ -82,6 +85,7 @@ public final class ByteUtils {
     }
 
     /**
+     * 写uint32
      * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
      *
      * @param buffer The buffer to write to
@@ -93,6 +97,7 @@ public final class ByteUtils {
     }
 
     /**
+     * 写uint32
      * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
      *
      * @param buffer The buffer to write to
@@ -320,6 +325,7 @@ public final class ByteUtils {
     }
 
     /**
+     * 写入varint, 参考Google Protocol Buffers
      * Write the given integer following the variable-length zig-zag encoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
      * into the buffer.
@@ -349,6 +355,7 @@ public final class ByteUtils {
     }
 
     /**
+     * 写入varlong, 参考Google Protocol Buffers
      * Write the given integer following the variable-length zig-zag encoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
      * into the buffer.
