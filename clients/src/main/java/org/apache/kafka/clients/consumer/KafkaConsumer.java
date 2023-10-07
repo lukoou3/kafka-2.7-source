@@ -1267,13 +1267,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * 拉取数据, 有数据立马返回；没有则最多等待timer时长
      * @throws KafkaException if the rebalance callback throws exception
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(Timer timer) {
         long pollTimeout = coordinator == null ? timer.remainingMs() :
                 Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
 
-        // 拉取数据
+        // 拉取数据, 如果数据已经可用立马返回
         // if data is available already, return it immediately
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
         if (!records.isEmpty()) {
@@ -1296,6 +1297,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         log.trace("Polling for fetches with timeout {}", pollTimeout);
 
         Timer pollTimer = time.timer(pollTimeout);
+        // 等待数据可用
         client.poll(pollTimer, () -> {
             // since a fetch might be completed by the background thread, we need this poll condition
             // to ensure that we do not block unnecessarily in poll()
@@ -1303,6 +1305,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         });
         timer.update(pollTimer.currentTimeMs());
 
+        // 再次尝试获取数据，没有则是Empty
         return fetcher.fetchedRecords();
     }
 

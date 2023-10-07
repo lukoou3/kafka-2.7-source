@@ -64,7 +64,9 @@ public abstract class BufferSupplier implements AutoCloseable {
     public abstract void close();
 
     // 这个类哪里有使用呢，相当于ByteBuffer pool
+    // 消费者Fetcher 拉取records时使用这个解压缩流
     private static class DefaultSupplier extends BufferSupplier {
+        // 我们目前使用单个块大小，因此针对这种情况进行优化
         // We currently use a single block size, so optimise for that case
         private final Map<Integer, Deque<ByteBuffer>> bufferMap = new HashMap<>(1);
 
@@ -82,6 +84,7 @@ public abstract class BufferSupplier implements AutoCloseable {
             buffer.clear();
             Deque<ByteBuffer> bufferQueue = bufferMap.get(buffer.capacity());
             if (bufferQueue == null) {
+                // 我们目前在正在处理中保留了一个缓冲区，因此可以针对这种情况进行优化
                 // We currently keep a single buffer in flight, so optimise for that case
                 bufferQueue = new ArrayDeque<>(1);
                 bufferMap.put(buffer.capacity(), bufferQueue);

@@ -354,6 +354,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return compressedIterator(bufferSupplier, true);
     }
 
+    /**
+     * 返回一个流迭代器，消费者调用的就是这个方法
+     * 注意这个方法和iterator()方法的区别，这个压缩时更加高效
+     *     没有压缩，和iterator()一样都是返回uncompressedIterator();
+     *     压缩，本方法返回流迭代器，解压缩buffer是复用的；iterator()方法新建一个buffer，循环迭代把records放入List,返回list iterator
+     * 使用这个流迭代器，解压缩时迭代完成后必须要调用close 方法 关闭解压缩流。iterator()不用手动关闭，但是效率更低。
+     */
     @Override
     public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         if (isCompressed())

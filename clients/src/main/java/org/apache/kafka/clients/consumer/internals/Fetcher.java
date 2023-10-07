@@ -296,6 +296,7 @@ public class Fetcher<K, V> implements Closeable {
                             Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
+                            // 遍历返回的分区records
                             for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
                                 TopicPartition partition = entry.getKey();
                                 FetchRequest.PartitionData requestData = data.sessionPartitions().get(partition);
@@ -320,9 +321,12 @@ public class Fetcher<K, V> implements Closeable {
                                     log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                             isolationLevel, fetchOffset, partition, partitionData);
 
+                                    // 返回MemoryRecords的batches
                                     Iterator<? extends RecordBatch> batches = partitionData.records().batches().iterator();
                                     short responseVersion = resp.requestHeader().apiVersion();
 
+                                    // 返回分区数据添加到completedFetches
+                                    // consumer会poll方法消费时会调用pollForFetches(timer) => fetcher.fetchedRecords()获取数据
                                     completedFetches.add(new CompletedFetch(partition, partitionData,
                                             metricAggregator, batches, fetchOffset, responseVersion));
                                 }
@@ -594,6 +598,7 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
+     * 返回拉取的records，清空record buffer并更新消费position。
      * Return the fetched records, empty the record buffer and update the consumed position.
      *
      * NOTE: returning empty records guarantees the consumed position are NOT updated.
@@ -610,12 +615,14 @@ public class Fetcher<K, V> implements Closeable {
 
         try {
             while (recordsRemaining > 0) {
+                // 下个要处理的CompletedFetch 为null或者已经被消费了，从completedFetches取出下一个
                 if (nextInLineFetch == null || nextInLineFetch.isConsumed) {
                     CompletedFetch records = completedFetches.peek();
                     if (records == null) break;
 
                     if (records.notInitialized()) {
                         try {
+                            // ...
                             nextInLineFetch = initializeCompletedFetch(records);
                         } catch (Exception e) {
                             // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
@@ -640,14 +647,17 @@ public class Fetcher<K, V> implements Closeable {
                     pausedCompletedFetches.add(nextInLineFetch);
                     nextInLineFetch = null;
                 } else {
+                    // 从nextInLineFetch(CompletedFetch) 提取records
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineFetch, recordsRemaining);
 
+                    // 分区数据放入返回结果fetched
                     if (!records.isEmpty()) {
                         TopicPartition partition = nextInLineFetch.partition;
                         List<ConsumerRecord<K, V>> currentRecords = fetched.get(partition);
                         if (currentRecords == null) {
                             fetched.put(partition, records);
                         } else {
+                            // 这种情况通常不应该发生，因为我们每个分区一次只发送一个获取，
                             // this case shouldn't usually happen because we only send one fetch at a time per partition,
                             // but it might conceivably happen in some rare cases (such as partition leader changes).
                             // we have to copy to a new list because the old one may be immutable
@@ -688,9 +698,12 @@ public class Fetcher<K, V> implements Closeable {
                 throw new IllegalStateException("Missing position for fetchable partition " + completedFetch.partition);
             }
 
+            // 这里又校验了一下位置
             if (completedFetch.nextFetchOffset == position.offset) {
+                // 从CompletedFetch解析出List<ConsumerRecord<K, V>>
                 List<ConsumerRecord<K, V>> partRecords = completedFetch.fetchRecords(maxRecords);
 
+                // 打印日志，从分配的分区拉取到records
                 log.trace("Returning {} fetched records at offset {} for assigned partition {}",
                         partRecords.size(), position, completedFetch.partition);
 
@@ -1237,6 +1250,7 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
+     * 校验完成CompletedFetch，标记CompletedFetch.initialized = true;
      * Initialize a CompletedFetch object.
      */
     private CompletedFetch initializeCompletedFetch(CompletedFetch nextCompletedFetch) {
@@ -1247,13 +1261,18 @@ public class Fetcher<K, V> implements Closeable {
         Errors error = partition.error();
 
         try {
+            // 没有分配这个分区
             if (!subscriptions.hasValidPosition(tp)) {
+                // 这可能发生在重新平衡发生时，而fetch仍在进行中
                 // this can happen when a rebalance happened while fetch is still in-flight
                 log.debug("Ignoring fetched records for partition {} since it no longer has valid position", tp);
-            } else if (error == Errors.NONE) {
+            }
+            // 大部分都是正常情况
+            else if (error == Errors.NONE) {
                 // we are interested in this fetch only if the beginning offset matches the
                 // current consumed position
                 FetchPosition position = subscriptions.position(tp);
+                // 匹配校验下次消费的位置
                 if (position == null || position.offset != fetchOffset) {
                     log.debug("Discarding stale fetch response for partition {} since its offset {} does not match " +
                             "the expected offset {}", tp, fetchOffset, position);
@@ -1380,6 +1399,7 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
+     * 解析Record => ConsumerRecord<K, V>，主要就是反序列化key、value
      * Parse the record entry, deserializing the key / value fields if necessary
      */
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition,
@@ -1547,6 +1567,7 @@ public class Fetcher<K, V> implements Closeable {
         private Record nextFetchedRecord() {
             while (true) {
                 if (records == null || !records.hasNext()) {
+                    // close records, 这是个流迭代器，开启压缩时内部会使用解压缩流，需要关闭
                     maybeCloseRecordStream();
 
                     if (!batches.hasNext()) {
@@ -1585,8 +1606,11 @@ public class Fetcher<K, V> implements Closeable {
                         }
                     }
 
+                    // 从RecordBatch解析出records，核心方法
+                    // decompressionBufferSupplier解压缩用到的buffer supplier，这个复用了buffer，减少了gc。这个只会在单个fetch线程调用
                     records = currentBatch.streamingIterator(decompressionBufferSupplier);
                 } else {
+                    // 返回下一条record
                     Record record = records.next();
                     // skip any records out of range
                     if (record.offset() >= nextFetchOffset) {
@@ -1622,11 +1646,13 @@ public class Fetcher<K, V> implements Closeable {
                     // use the last record to do deserialization again.
                     if (cachedRecordException == null) {
                         corruptLastRecord = true;
+                        // 从RecordBatch获取下一条record
                         lastRecord = nextFetchedRecord();
                         corruptLastRecord = false;
                     }
                     if (lastRecord == null)
                         break;
+                    // parseRecord逻辑简单，解析Record => ConsumerRecord<K, V>，主要就是反序列化key、value
                     records.add(parseRecord(partition, currentBatch, lastRecord));
                     recordsRead++;
                     bytesRead += lastRecord.sizeInBytes();

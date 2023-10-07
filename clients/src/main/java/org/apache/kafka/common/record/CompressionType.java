@@ -157,13 +157,24 @@ public enum CompressionType {
     public abstract OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion);
 
     /**
+     * 使用InputStream包装buffer，使用此CompressionType解压缩。
      * Wrap buffer with an InputStream that will decompress data with this CompressionType.
+     *
+     * decompressionBufferSupplier：用于提供解压缩的buffer，对于小的record batches，分配一个潜在的大缓冲区（LZ4为64KB）将影响对批中记录进行解压缩和迭代的成本。
+     *                             因此，重复使用buffer supplier 将对性能产生重要影响。实际上，消费者Fetcher拉取records时解压缩时就是复用了一个decompressionBufferSupplier。
+     *                             snappy解压时不使用buffer supplier， lz4解压时使用buffer supplier。
+     *
+     *                             从org.xerial.snappy.SnappyInputStream可以看出，snappy内部直接把整个数据解压了，把解压后的数据放入byte[]。
+     *                             org.apache.kafka.common.record.KafkaLZ4BlockInputStream：bufferSupplier使用maxBlockSize大小的buffer，maxBlockSize是从Header中获取的，这个在kafka中是固定的吧，否则不好复用bufferSupplier了，看看，压缩部分的代码
+     *                             从org.apache.kafka.common.record.KafkaLZ4BlockOutputStream的构造函数可以看出，压缩是默认使用64KB的blockSize，实际kafka使用的就是默认的64KB的blockSize
+     *                             从这里可以看出解压缩lz4 应该比 snappy高效，至少gc压力小点
      *
      * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
      *                                    For small record batches, allocating a potentially large buffer (64 KB for LZ4)
      *                                    will dominate the cost of decompressing and iterating over the records in the
      *                                    batch. As such, a supplier that reuses buffers will have a significant
      *                                    performance impact.
+     *
      */
     public abstract InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier);
 

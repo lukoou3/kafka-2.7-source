@@ -217,6 +217,9 @@ public interface RecordBatch extends Iterable<Record> {
     int partitionLeaderEpoch();
 
     /**
+     * 返回一个流迭代器，它基本上会延迟记录流的解压缩，直到使用iterator.next（）实际请求记录为止。
+     * 如果消息格式不支持流迭代，则返回正常迭代器。
+     * 无论哪种方式，调用方都应该确保迭代器是关闭的。
      * Return a streaming iterator which basically delays decompression of the record stream until the records
      * are actually asked for using {@link Iterator#next()}. If the message format does not support streaming
      * iteration, then the normal iterator is returned. Either way, callers should ensure that the iterator is closed.

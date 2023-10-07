@@ -61,6 +61,8 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
     /**
      * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
      *
+     *  blockSize： 默认值：4。压缩过程中使用的块大小。4＝64kb，5＝256kb，6＝1mb，7＝4mb。所有其他值都将生成异常
+     *
      * @param out The output stream to compress
      * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
      *            values will generate an exception
@@ -79,8 +81,9 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
         flg = new FLG(blockChecksum);
         bufferOffset = 0;
         maxBlockSize = bd.getBlockMaximumSize();
-        buffer = new byte[maxBlockSize];
-        compressedBuffer = new byte[compressor.maxCompressedLength(maxBlockSize)];
+        buffer = new byte[maxBlockSize]; // 最大块大小：64Kb
+        // buffer是每次压缩的最大的块大小，compressedBuffer是buffer压缩后最大的长度。把compressedBuffer写出到OutputStream
+        compressedBuffer = new byte[compressor.maxCompressedLength(maxBlockSize)]; // 最大块大小本身就是LZ4Compressor的方法
         finished = false;
         writeHeader();
     }
@@ -162,6 +165,7 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
     }
 
     /**
+     * 压缩buffer的数据，可选地计算XXHash32校验和，并将结果写入底层OutputStream。
      * Compresses buffered data, optionally computes an XXHash32 checksum, and writes the result to the underlying
      * {@link OutputStream}.
      *
@@ -215,17 +219,21 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
         buffer[bufferOffset++] = (byte) b;
     }
 
+    // 把byte[]写入out stream
     @Override
     public void write(byte[] b, int off, int len) throws IOException {
         net.jpountz.util.SafeUtils.checkRange(b, off, len);
         ensureNotFinished();
 
         int bufferRemainingLength = maxBlockSize - bufferOffset;
+        // b 会溢出buffer
         // while b will fill the buffer
         while (len > bufferRemainingLength) {
+            // 填满
             // fill remaining space in buffer
             System.arraycopy(b, off, buffer, bufferOffset, bufferRemainingLength);
             bufferOffset = maxBlockSize;
+            // buffer溢出到out stream
             writeBlock();
             // compute new offset and length
             off += bufferRemainingLength;
@@ -233,6 +241,7 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
             bufferRemainingLength = maxBlockSize;
         }
 
+        // 这里没有溢出到out stream，flush()、close()方法肯定会溢出
         System.arraycopy(b, off, buffer, bufferOffset, len);
         bufferOffset += len;
     }

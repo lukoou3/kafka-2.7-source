@@ -76,6 +76,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
         this.in = in.duplicate().order(ByteOrder.LITTLE_ENDIAN);
         this.bufferSupplier = bufferSupplier;
         readHeader();
+        // maxBlockSize是从Header中获取的，这个在kafka中是固定的吧，否则不好复用bufferSupplier了，看看，压缩部分的代码
         decompressionBuffer = bufferSupplier.get(maxBlockSize);
         if (!decompressionBuffer.hasArray() || decompressionBuffer.arrayOffset() != 0) {
             // require array backed decompression buffer with zero offset
@@ -142,6 +143,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     }
 
     /**
+     * 解压缩（如有必要）缓冲的数据，可选地计算和验证XXHash32校验和，并将结果写入缓冲区。
      * Decompresses (if necessary) buffered data, optionally computes and validates a XXHash32 checksum, and writes the
      * result to a buffer.
      *
@@ -190,6 +192,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
                 }
                 decompressionBuffer.position(0);
                 decompressionBuffer.limit(bufferSize);
+                // 解压后的数据
                 decompressedBuffer = decompressionBuffer;
             } catch (LZ4Exception e) {
                 throw new IOException(e);
@@ -229,20 +232,23 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
         return decompressedBuffer.get() & 0xFF;
     }
 
+    // 读取数据
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
         net.jpountz.util.SafeUtils.checkRange(b, off, len);
         if (finished) {
             return -1;
         }
+        // decompressedBuffer中剩余没读数据
         if (available() == 0) {
             readBlock();
         }
         if (finished) {
             return -1;
         }
+        // 本次最大读取长度
         len = Math.min(len, available());
-
+        // 从decompressedBuffer(解压后的数据)读取数据到byte[]
         decompressedBuffer.get(b, off, len);
         return len;
     }
