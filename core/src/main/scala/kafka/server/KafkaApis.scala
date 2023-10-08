@@ -661,7 +661,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   /**
-   * 处理拉取数据请求
+   * 处理拉取数据请求。
+   * 搜索日志流程：
+   *    ReplicaManager.fetchMessages 调用副本管理，拉取数据从本地副本
+   *    ReplicaManager.readFromLocalLog 拉取数据从本地副本，遍历每个分区读取数据
+   *    Partition.readRecords 读取分区数据
+   *    Log.read 从Log根据startOffset读取messages
+   *    从log的segments中检索到对应segment，segments 跳表结构 ConcurrentSkipListMap[Long, LogSegment]
+   *    LogSegment.read 从segment读取(根据索引文件二分查找)
    * Handle a fetch request
    */
   def handleFetchRequest(request: RequestChannel.Request): Unit = {

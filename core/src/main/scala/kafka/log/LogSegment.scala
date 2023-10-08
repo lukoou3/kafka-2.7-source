@@ -263,6 +263,7 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
+   * 查找第一条 偏移量>=请求的偏移量 消息的文件位置。
    * Find the physical file position for the first message with offset >= the requested offset.
    *
    * The startingFilePosition argument is an optimization that can be used if we already know a valid starting position
@@ -276,11 +277,15 @@ class LogSegment private[log] (val log: FileRecords,
    */
   @threadsafe
   private[log] def translateOffset(offset: Long, startingFilePosition: Int = 0): LogOffsetPosition = {
+    // 根据索引文件找到小于或等于给定targetOffset的最大偏移量的位置
     val mapping = offsetIndex.lookup(offset)
+    // 查找第一条 offset >= the requested offset
+    // 返回第一个lastOffset >= targetOffset的RecordBatch位置，因为batch消息可能包含多条，而且可能压缩records，没法一条一条解析
     log.searchForOffsetWithSize(offset, max(mapping.position, startingFilePosition))
   }
 
   /**
+   * 从first offset >= startOffset读取消息，最大读取maxSize字节
    * Read a message set from this segment beginning with the first offset >= startOffset. The message set will include
    * no more than maxSize bytes and will end before maxOffset if a maxOffset is specified.
    *
@@ -300,6 +305,7 @@ class LogSegment private[log] (val log: FileRecords,
     if (maxSize < 0)
       throw new IllegalArgumentException(s"Invalid max size $maxSize for log read from segment $log")
 
+    // 返回第一个lastOffset >= targetOffset的RecordBatch位置，因为batch消息可能包含多条，而且可能压缩records，没法一条一条解析
     val startOffsetAndSize = translateOffset(startOffset)
 
     // if the start position is already off the end of the log, return null
@@ -321,6 +327,7 @@ class LogSegment private[log] (val log: FileRecords,
     val fetchSize: Int = min((maxPosition - startPosition).toInt, adjustedMaxSize)
 
     // 读取的数据内容：log.slice(startPosition, fetchSize)，FileRecords里实际没有数据buffer
+    // 因为batch消息可能包含多条，而且可能压缩records，所以这里返回的数据肯定可能多，客户端应该有处理的地方(org.apache.kafka.clients.consumer.internals.Fetcher.CompletedFetch.nextFetchedRecord)
     // FileRecords是对File和FileChannel的包装
     FetchDataInfo(offsetMetadata, log.slice(startPosition, fetchSize),
       firstEntryIncomplete = adjustedMaxSize < startOffsetAndSize.size)
