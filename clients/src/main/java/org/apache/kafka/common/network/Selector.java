@@ -144,7 +144,7 @@ public class Selector implements Selectable, AutoCloseable {
      * @param logContext Context for logging with additional info
      */
     public Selector(int maxReceiveSize,
-            long connectionMaxIdleMs,
+            long connectionMaxIdleMs, // 在此配置指定的毫秒数之后关闭空闲连接。
             int failedAuthenticationDelayMs,
             Metrics metrics,
             Time time,
@@ -498,6 +498,7 @@ public class Selector implements Selectable, AutoCloseable {
         // Close channels that were delayed and are now ready to be closed
         completeDelayedChannelClose(endIo);
 
+        // 我们使用select结束时的时间来确保不会关闭刚刚在pollSelectionKeys中处理过的任何连接
         // we use the time at the end of select to ensure that we don't close any connections that
         // have just been processed in pollSelectionKeys
         maybeCloseOldestConnection(endSelect);
@@ -601,6 +602,7 @@ public class Selector implements Selectable, AutoCloseable {
                     throw e;
                 }
 
+                // cancel any defunct sockets
                 /* cancel any defunct sockets */
                 if (!key.isValid())
                     close(channel, CloseMode.GRACEFUL);
@@ -788,6 +790,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
+    // 尝试关闭可能关闭的连接
     private void maybeCloseOldestConnection(long currentTimeNanos) {
         if (idleExpiryManager == null)
             return;
@@ -913,6 +916,7 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     /**
+     * 什么时候回关闭客户端的连接呢
      * Begin closing this connection.
      * If 'closeMode' is `CloseMode.GRACEFUL`, the channel is disconnected here, but outstanding receives
      * are processed. The channel is closed when there are no outstanding receives or if a send is

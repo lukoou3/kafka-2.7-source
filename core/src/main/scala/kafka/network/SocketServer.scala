@@ -438,7 +438,7 @@ class SocketServer(val config: KafkaConfig,
       config.socketRequestMaxBytes,
       requestChannel,
       connectionQuotas,
-      config.connectionsMaxIdleMs,
+      config.connectionsMaxIdleMs, // connections.max.idle.ms, 默认10分钟：10 * 60 * 1000L
       config.failedAuthenticationDelayMs,
       listenerName,
       securityProtocol,
