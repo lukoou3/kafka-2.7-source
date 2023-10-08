@@ -20,6 +20,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 /**
+ * 由ByteBuffer支持的InputStream
  * A byte buffer backed input inputStream
  */
 public final class ByteBufferInputStream extends InputStream {
@@ -36,6 +37,7 @@ public final class ByteBufferInputStream extends InputStream {
         return buffer.get() & 0xFF;
     }
 
+    // InputStream接口的这个方法不要求必须读够len长度
     public int read(byte[] bytes, int off, int len) {
         if (!buffer.hasRemaining()) {
             return -1;
