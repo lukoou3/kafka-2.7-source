@@ -18,4 +18,5 @@ if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
     export KAFKA_HEAP_OPTS="-Xmx512M"
 fi
 
+# 可以看到实际上调用的kafka-run-class.sh
 exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsoleConsumer "$@"

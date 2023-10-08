@@ -37,6 +37,14 @@ object DumpLogSegments {
   // visible for testing
   private[tools] val RecordIndent = "|"
 
+  /**
+   * 既可以使用 kafka-run-class.sh kafka.tools.DumpLogSegments的方式，又可以使用kafka-dump-log.sh的方式
+   *
+   * //查看.index文件的内容
+   * kafka-run-class.sh kafka.tools.DumpLogSegments --files 00000000000000000000.index --print-data-log
+   * //查看.log文件的内容
+   * kafka-run-class.sh kafka.tools.DumpLogSegments --files 00000000000000000000.log --print-data-log
+   */
   def main(args: Array[String]): Unit = {
     val opts = new DumpLogSegmentsOptions(args)
     CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
@@ -54,6 +62,7 @@ object DumpLogSegments {
       val suffix = filename.substring(filename.lastIndexOf("."))
       suffix match {
         case Log.LogFileSuffix =>
+          // 输出日志内容
           dumpLog(file, opts.shouldPrintDataLog, nonConsecutivePairsForLogFilesMap, opts.isDeepIteration,
             opts.maxMessageSize, opts.messageParser)
         case Log.IndexFileSuffix =>
@@ -238,15 +247,19 @@ object DumpLogSegments {
                       isDeepIteration: Boolean,
                       maxMessageSize: Int,
                       parser: MessageParser[_, _]): Unit = {
+    // 文件名就是start offset
     val startOffset = file.getName.split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
+    // FileRecords
     val fileRecords = FileRecords.open(file, false)
     try {
       var validBytes = 0L
       var lastOffset = -1L
 
       for (batch <- fileRecords.batches.asScala) {
+        // 输出这个RecordBatch整体的信息
         printBatchLevel(batch, validBytes)
+        // 是否输出每条日志的详细内容
         if (isDeepIteration) {
           for (record <- batch.asScala) {
             if (lastOffset == -1)
