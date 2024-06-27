@@ -228,9 +228,11 @@ public final class Sensor {
             synchronized (metricLock()) {
                 // increment all the stats
                 for (StatAndConfig statAndConfig : this.stats) {
+                    // 统计
                     statAndConfig.stat.record(statAndConfig.config(), value, timeMs);
                 }
             }
+            // 检查限流
             if (checkQuotas)
                 checkQuotas(timeMs);
         }

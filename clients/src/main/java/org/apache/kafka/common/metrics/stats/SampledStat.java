@@ -23,6 +23,11 @@ import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 
 /**
+ * SampledStat记录在一个或多个样本上测量的单个标量值。每个样本都记录在一个可配置的窗口中。窗口可以由事件数或经过时间定义（或者两者都定义，如果两者都给定，则当满足事件计数或经过时间标准时，窗口即完成）。
+ *
+ * 将所有样本组合起来进行测量。当一个窗口完成时，最旧的样本被清除并回收，开始记录下一个样本。这个类的子类定义了使用这个基本模式测量的不同统计信息。
+ *
+ * 类似flink中滑动窗口算法计算速率
  * A SampledStat records a single scalar value measured over one or more samples. Each sample is recorded over a
  * configurable window. The window can be defined by number of events or elapsed time (or both, if both are given the
  * window is complete when <i>either</i> the event count or elapsed time criterion is met).
