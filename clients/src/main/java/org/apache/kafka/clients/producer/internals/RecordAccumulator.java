@@ -492,6 +492,12 @@ public final class RecordAccumulator {
                             readyNodes.add(leader);
                         } else {
                             long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
+                            /**
+                             * 这里实现至少到达lingerMs时间发送生产请求
+                             * timeLeftMs = 还需等待多长时长等待时长等于lingerMs
+                             * NetworkClient.poll(long timeout, long now)调用selector.poll(long timeout)会取timeout的最小值
+                             *   selector.poll(Utils.min(timeout, metadataTimeout, defaultRequestTimeoutMs))
+                             */
                             // Note that this results in a conservative estimate since an un-sendable partition may have
                             // a leader that will later be found to have sendable data. However, this is good enough
                             // since we'll just wake up and then sleep again for the remaining time.

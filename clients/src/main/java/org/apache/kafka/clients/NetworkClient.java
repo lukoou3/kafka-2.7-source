@@ -570,6 +570,13 @@ public class NetworkClient implements KafkaClient {
         // 发送元数据请求
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
+            /**
+             * 这里实现的send线程阻塞，有发送请求时会发送请求，
+             * 取timeout的最小值使每种请求都能尽早唤醒，发送生产日志、更新元数据等
+             *    timeout是sendProducerData发送日志返回的等待到达下次lingerMs时间的时间
+             *    metadataTimeout是下次需要更新元数据的时间
+             * 当日志达到Batch大小(16kb)时也会唤醒send线程: selector.wakeup()
+             */
             this.selector.poll(Utils.min(timeout, metadataTimeout, defaultRequestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
@@ -636,6 +643,7 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void wakeup() {
+        // 唤醒send线程, 似乎是nio的方法
         this.selector.wakeup();
     }
 

@@ -48,8 +48,8 @@ public class ConfigUtils {
      * @return a new configuration map with deprecated  keys translated to their non-deprecated equivalents
      */
     public static <T> Map<String, T> translateDeprecatedConfigs(Map<String, T> configs, String[][] aliasGroups) {
-        return translateDeprecatedConfigs(configs, Stream.of(aliasGroups)
-            .collect(Collectors.toMap(x -> x[0], x -> Stream.of(x).skip(1).collect(Collectors.toList()))));
+        return translateDeprecatedConfigs(configs, (Map<String, List<String>>)Stream.of(aliasGroups)
+            .collect(Collectors.toMap((String[] x) -> x[0], (String[] x) -> Stream.of(x).skip(1).collect(Collectors.toList()))));
     }
 
     /**

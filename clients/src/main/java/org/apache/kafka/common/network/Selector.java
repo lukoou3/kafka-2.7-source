@@ -464,7 +464,7 @@ public class Selector implements Selectable, AutoCloseable {
 
         /* check ready keys */
         long startSelect = time.nanoseconds();
-        int numReadyKeys = select(timeout);
+        int numReadyKeys = select(timeout); // 这里实现的阻塞
         long endSelect = time.nanoseconds();
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
