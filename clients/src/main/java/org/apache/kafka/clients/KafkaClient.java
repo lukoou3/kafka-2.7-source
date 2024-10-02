@@ -88,6 +88,7 @@ public interface KafkaClient extends Closeable {
     AuthenticationException authenticationException(Node node);
 
     /**
+     * 将给定的请求排队等待发送。请求只能在就绪连接上发送。
      * Queue up the given request for sending. Requests can only be sent on ready connections.
      * @param request The request
      * @param now The current timestamp

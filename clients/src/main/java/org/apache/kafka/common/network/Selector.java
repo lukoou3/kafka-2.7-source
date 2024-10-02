@@ -56,6 +56,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
+ * nioSelector接口：一个用于进行无阻塞多连接网络I/O。
+ * 此类与NetworkSend和NetworkReceive配合使用，以传输以size-delimited的网络请求和响应。
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
  * <p>
  * This class works with {@link NetworkSend} and {@link NetworkReceive} to transmit size-delimited network requests and
@@ -67,9 +69,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * nioSelector.connect(&quot;42&quot;, new InetSocketAddress(&quot;google.com&quot;, server.port), 64000, 64000);
  * </pre>
  *
+ * connect调用不会阻止TCP连接的创建，因此connect方法仅开始启动连接。成功调用此方法并不意味着已建立有效连接。
  * The connect call does not block on the creation of the TCP connection, so the connect method only begins initiating
  * the connection. The successful invocation of this method does not mean a valid connection has been established.
  *
+ * 发送请求、接收响应、处理连接完成和断开现有连接都是使用poll（）调用完成的。
  * Sending requests, receiving responses, processing connection completions, and disconnections on the existing
  * connections are all done using the <code>poll()</code> call.
  *
@@ -79,6 +83,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * nioSelector.poll(TIMEOUT_MS);
  * </pre>
  *
+ * nioSelector维护了几个列表，每次调用poll（）都会重置这些列表，这些列表可以通过各种getter获得。
+ * 每次调用poll（）都会重置这些值。这个类不是线程安全的！
  * The nioSelector maintains several lists that are reset by each call to <code>poll()</code> which are available via
  * various getters. These are reset by each call to <code>poll()</code>.
  *
@@ -102,20 +108,31 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private final Logger log;
+    // java nio的Selector，用来监听网络I/O事件
     private final java.nio.channels.Selector nioSelector;
+    // broker和KafkaChannel的映射，KafkaChannel就是对java nio SocketChannel的封装
     private final Map<String, KafkaChannel> channels;
+    // 明确被静默的channel
     private final Set<KafkaChannel> explicitlyMutedChannels;
     private boolean outOfMemory;
+    // 已经完成发送的请求
     private final List<Send> completedSends;
+    // 已经接收完成的响应channel.id -> NetworkReceive，每个channel同时只有一个Receive，在完成接收完成下一个响应前会处理这个响应
     private final LinkedHashMap<String, NetworkReceive> completedReceives;
+    // 立即连接的SelectionKey集合
     private final Set<SelectionKey> immediatelyConnectedKeys;
+    // 正确关闭的channel
     private final Map<String, KafkaChannel> closingChannels;
     private Set<SelectionKey> keysWithBufferedRead;
+    // 断开连接的节点集合
     private final Map<String, ChannelState> disconnected;
+    // 连接成功的节点集合
     private final List<String> connected;
+    // 发送失败的节点集合
     private final List<String> failedSends;
     private final Time time;
     private final SelectorMetrics sensors;
+    // 用来构建 KafkaChannel 的工具类
     private final ChannelBuilder channelBuilder;
     private final int maxReceiveSize;
     private final boolean recordTimePerConnection;

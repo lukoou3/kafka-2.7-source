@@ -67,6 +67,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
+ * 用于异步请求/响应网络i/o的网络客户端。这是一个内部类，用于实现面向用户的生产者和消费者客户端。
+ * 这个类不是线程安全的！
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
  * user-facing producer and consumer clients.
  * <p>
@@ -92,6 +94,7 @@ public class NetworkClient implements KafkaClient {
     /* the state of each node's connection */
     private final ClusterConnectionStates connectionStates;
 
+    // 每个broker正在发送或者正在等待响应的请求
     /* the set of requests currently being sent or awaiting a response */
     private final InFlightRequests inFlightRequests;
 
@@ -442,7 +445,7 @@ public class NetworkClient implements KafkaClient {
     public boolean isReady(Node node, long now) {
         // 如果我们需要更新元数据，现在就声明所有请求都未就绪，以使元数据请求成为第一优先级
         // if we need to update our metadata now declare all requests unready to make metadata requests first priority
-        return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString(), now);
+        return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString(), now); // 并且这个节点可以发送更多的请求
     }
 
     /**
@@ -457,6 +460,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * 将给定的请求排队等待发送。请求只能在就绪连接上发送。
      * Queue up the given request for sending. Requests can only be sent out to ready nodes.
      * @param request The request
      * @param now The current timestamp
@@ -585,7 +589,9 @@ public class NetworkClient implements KafkaClient {
         // process completed actions
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
+        // 如果是预计没有响应(不需要服务端返回的请求)，则认为请求已完成。
         handleCompletedSends(responses, updatedNow);
+        // 处理请求需要返回的响应
         handleCompletedReceives(responses, updatedNow);
         handleDisconnections(responses, updatedNow);
         handleConnections();
@@ -851,6 +857,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * 处理任何已完成的请求发送。特别是如果预计没有响应(不需要服务端返回的请求)，则认为请求已完成。
      * Handle any completed request send. In particular if no response is expected consider the request complete.
      *
      * @param responses The list of responses to update
@@ -860,7 +867,9 @@ public class NetworkClient implements KafkaClient {
         // if no response is expected then when the send is completed, return it
         for (Send send : this.selector.completedSends()) {
             InFlightRequest request = this.inFlightRequests.lastSent(send.destination());
+            // 如果不需要响应
             if (!request.expectResponse) {
+                // 从inFlightRequests取出，pollFirst()
                 this.inFlightRequests.completeLastSent(send.destination());
                 responses.add(request.completed(null, now));
             }
@@ -896,6 +905,7 @@ public class NetworkClient implements KafkaClient {
         // 遍历收到的NetworkReceive
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source(); // 哪个node发的
+            // 从inFlightRequests取出，pollFirst()
             InFlightRequest req = inFlightRequests.completeNext(source); // 获取对应在处理中没完成的请求
             Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header,
                 throttleTimeSensor, now);

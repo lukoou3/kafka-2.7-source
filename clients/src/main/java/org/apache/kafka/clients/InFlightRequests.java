@@ -31,7 +31,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 final class InFlightRequests {
 
+    // 一个Producer每个broker同时可以发送的未收到确认的消息数量，默认是5，大于1有可能会造成乱序。max.in.flight.requests.per.connection
     private final int maxInFlightRequestsPerConnection;
+    // 每个broker的Deque<NetworkClient.InFlightRequest>的最大size是maxInFlightRequestsPerConnection
     private final Map<String, Deque<NetworkClient.InFlightRequest>> requests = new HashMap<>();
     /** Thread safe total number of in flight requests. */
     private final AtomicInteger inFlightRequestCount = new AtomicInteger(0);
@@ -94,6 +96,7 @@ final class InFlightRequests {
     }
 
     /**
+     * 这个节点是否可以发送更多的请求
      * Can we send more requests to this node?
      *
      * @param node Node in question
