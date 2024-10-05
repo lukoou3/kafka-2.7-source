@@ -682,6 +682,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             }
 
             this.log = logContext.logger(getClass());
+            // 配置group.id并且启用enable.auto.commit
             boolean enableAutoCommit = config.maybeOverrideEnableAutoCommit();
             groupId.ifPresent(groupIdStr -> {
                 if (groupIdStr.isEmpty()) {
@@ -717,6 +718,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 this.valueDeserializer = valueDeserializer;
             }
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
+            // 用于跟踪主题、分区和偏移量
             this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer,
                     valueDeserializer, metrics.reporters(), interceptorList);
@@ -767,6 +769,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             this.assignors = getAssignorInstances(config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG), config.originals());
 
+            // 如果配置group.id则创建coordinator，否则coordinator赋值为null
             // no coordinator will be constructed for the default (null) group id
             this.coordinator = !groupId.isPresent() ? null :
                 new ConsumerCoordinator(groupRebalanceConfig,
@@ -774,7 +777,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         this.client,
                         assignors,
                         this.metadata,
-                        this.subscriptions,
+                        this.subscriptions, // 用于跟踪主题、分区和偏移量
                         metrics,
                         metricGrpPrefix,
                         this.time,
@@ -782,6 +785,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                         this.interceptors,
                         config.getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
+            // 拉取消息的主要实现
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,
@@ -795,7 +799,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.keyDeserializer,
                     this.valueDeserializer,
                     this.metadata,
-                    this.subscriptions,
+                    this.subscriptions, // 用于跟踪主题、分区和偏移量
                     metrics,
                     metricsRegistry,
                     this.time,
@@ -1074,6 +1078,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * 手动为此使用者分配分区列表。此接口不允许增量分配，并将替换之前的分配（如果有的话）。
+     * 如果给定的主题分区列表为空，则将其视为取消订阅（）。
+     * 通过此方法手动分配主题不使用消费者的组管理功能。因此，当组成员资格或集群和主题元数据发生变化时，不会触发重新平衡操作。
+     * 请注意，不能同时使用手动分区分配和分配（Collection）以及组分配和订阅（Collection、ConsumerRebalanceListener）。
+     * 如果启用了自动提交，则在新分配替换旧分配之前，将触发异步提交（基于旧分配）。
      * Manually assign a list of partitions to this consumer. This interface does not allow for incremental assignment
      * and will replace the previous assignment (if there is one).
      * <p>
@@ -1094,6 +1103,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void assign(Collection<TopicPartition> partitions) {
+        // 校验不能多线程访问
         acquireAndEnsureOpen();
         try {
             if (partitions == null) {

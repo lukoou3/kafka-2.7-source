@@ -469,6 +469,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         invokeCompletedOffsetCommitCallbacks();
 
+        // 订阅模式，需要coordinator协调分配分区，启动HeartbeatThread保持心跳
         if (subscriptions.hasAutoAssignedPartitions()) {
             if (protocol == null) {
                 throw new IllegalStateException("User configured " + ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG +
@@ -526,6 +527,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         }
 
+        // 是在这里自动提交Offsets吧
         maybeAutoCommitOffsetsAsync(timer.currentTimeMs());
         return true;
     }

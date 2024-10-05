@@ -73,15 +73,21 @@ public class SubscriptionState {
     private final Logger log;
 
     private enum SubscriptionType {
-        NONE, AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED
+        NONE, //初始值, 没有状态
+        AUTO_TOPICS, // 按照指定的topic 名字进行订阅，自动分配分区
+        AUTO_PATTERN, // 按照正则表达式匹配topic名字进行订阅，自动分配分区
+        USER_ASSIGNED // 用户自己指定订阅的topic以及分区号
     }
 
+    // 订阅模式
     /* the type of subscription */
     private SubscriptionType subscriptionType;
 
+    // 用户设置的按照正则表达式匹配的pattern
     /* the pattern user has requested */
     private Pattern subscribedPattern;
 
+    // 订阅的topics
     /* the list of topics the user has requested */
     private Set<String> subscription;
 
@@ -90,9 +96,11 @@ public class SubscriptionState {
      * which require a group rebalance. */
     private Set<String> groupSubscription;
 
+    // 当前分配的分区, 无论什么订阅模式，都用这个assigment记录每个TopicPartition的消费状态
     /* the partitions that are currently assigned, note that the order of partition matters (see FetchBuilder for more details) */
     private final PartitionStates<TopicPartitionState> assignment;
 
+    // 默认offsetReset策略
     /* Default offset reset strategy */
     private final OffsetResetStrategy defaultResetStrategy;
 
@@ -210,6 +218,7 @@ public class SubscriptionState {
     }
 
     /**
+     * 将分配更改为用户提供的指定分区，注意这与assignFromSubscribed（Collection）不同，后者的输入分区由订阅的主题提供。
      * Change the assignment to the specified partitions provided by the user,
      * note this is different from {@link #assignFromSubscribed(Collection)}
      * whose input partitions are provided from the subscribed topics.
@@ -739,6 +748,7 @@ public class SubscriptionState {
     private static class TopicPartitionState {
 
         private FetchState fetchState;
+        // 下一次要从kafka服务器端获取消息的offset
         private FetchPosition position; // last consumed position
 
         private Long highWatermark; // the high watermark from last fetch
