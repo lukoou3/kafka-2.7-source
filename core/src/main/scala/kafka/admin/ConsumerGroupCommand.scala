@@ -70,13 +70,16 @@ object ConsumerGroupCommand extends Logging {
   def run(opts: ConsumerGroupCommandOptions): Unit = {
     val consumerGroupService = new ConsumerGroupService(opts)
     try {
-      if (opts.options.has(opts.listOpt))
+      if (opts.options.has(opts.listOpt)) {
+        // 列出所有的group
         consumerGroupService.listGroups()
-      else if (opts.options.has(opts.describeOpt))
+      } else if (opts.options.has(opts.describeOpt)) {
+        // desc 某个group
         consumerGroupService.describeGroups()
-      else if (opts.options.has(opts.deleteOpt))
+      } else if (opts.options.has(opts.deleteOpt))
         consumerGroupService.deleteGroups()
       else if (opts.options.has(opts.resetOffsetsOpt)) {
+        // reset offset
         val offsetsToReset = consumerGroupService.resetOffsets()
         if (opts.options.has(opts.exportOpt)) {
           val exported = consumerGroupService.exportOffsetsToCsv(offsetsToReset)
@@ -420,11 +423,14 @@ object ConsumerGroupCommand extends Logging {
       }.toArray
     }
 
+    // reset Offset
     def resetOffsets(): Map[String, Map[TopicPartition, OffsetAndMetadata]] = {
+      // 需要重置的group.id
       val groupIds =
         if (opts.options.has(opts.allGroupsOpt)) listConsumerGroups()
         else opts.options.valuesOf(opts.groupOpt).asScala
 
+      // 调用KafkaAdminClient的方法
       val consumerGroups = adminClient.describeConsumerGroups(
         groupIds.asJava,
         withTimeoutMs(new DescribeConsumerGroupsOptions)
@@ -441,6 +447,7 @@ object ConsumerGroupCommand extends Logging {
                 // Dry-run is the default behavior if --execute is not specified
                 val dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt)
                 if (!dryRun) {
+                  // 重置
                   adminClient.alterConsumerGroupOffsets(
                     groupId,
                     preparedOffsets.asJava,
@@ -449,6 +456,7 @@ object ConsumerGroupCommand extends Logging {
                 }
                 acc.updated(groupId, preparedOffsets)
               case currentState =>
+                // groupId非活跃状态才允许重置
                 printError(s"Assignments can only be reset if the group '$groupId' is inactive, but the current state is $currentState.")
                 acc.updated(groupId, Map.empty)
             }

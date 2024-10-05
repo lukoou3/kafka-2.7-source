@@ -1612,6 +1612,7 @@ public class Fetcher<K, V> implements Closeable {
                 } else {
                     // 返回下一条record
                     Record record = records.next();
+                    // 服务端返回的是整个batch，因为batch消息可能包含多条，而且可能压缩records，所以这里返回的数据肯定可能多
                     // skip any records out of range
                     if (record.offset() >= nextFetchOffset) {
                         // we only do validation when the message should not be skipped.

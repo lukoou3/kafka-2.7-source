@@ -20,6 +20,13 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
+ * 由ByteBuffer支持的OutputStream，会根据需要扩展内部的ByteBuffer。考虑到这一点，调用者应该使用buffer()方法访问底层的ByteBuffer，直到写入完成(底层ByteBuffer可能因为扩容修改)。
+ * 这个类通常被用于2中目的：
+ *    1. 写入ByteBuffer，当我们可能需要扩展ByteBuffer以适应所有需要的数据时
+ *    2. 通过期望OutputStream接口的方法写入ByteBuffer
+ * 当由于第二个原因使用此类并且发生意外的buffer扩展时，难以跟踪bug。因此，最好假设buffer扩展总是可能发生的。
+ * 一个改进是创建一个单独的类，如果需要扩展缓冲区抛出错误，来完全避免这个问题。
+ *
  * A ByteBuffer-backed OutputStream that expands the internal ByteBuffer as required. Given this, the caller should
  * always access the underlying ByteBuffer via the {@link #buffer()} method until all writes are completed.
  *
@@ -61,6 +68,7 @@ public class ByteBufferOutputStream extends OutputStream {
         this(directBuffer ? ByteBuffer.allocateDirect(initialCapacity) : ByteBuffer.allocate(initialCapacity));
     }
 
+    // OutputStream接口定义的这个方法是写字节，不要被参数迷惑了
     public void write(int b) {
         ensureRemaining(1);
         buffer.put((byte) b);
@@ -98,6 +106,7 @@ public class ByteBufferOutputStream extends OutputStream {
     }
 
     /**
+     * 此类使用的第一个内部ByteBuffer的容量。这在池化ByteBuffer通过构造函数传递并且需要返回到池的情况下非常有用。
      * The capacity of the first internal ByteBuffer used by this class. This is useful in cases where a pooled
      * ByteBuffer was passed via the constructor and it needs to be returned to the pool.
      */
@@ -106,6 +115,7 @@ public class ByteBufferOutputStream extends OutputStream {
     }
 
     /**
+     * 确保有足够的空间写入一定数量的字节，必要时扩展底层缓冲区。当您知道总共需要多少字节时，这可以用来避免通过调用write（int）进行增量扩展。
      * Ensure there is enough space to write some number of bytes, expanding the underlying buffer if necessary.
      * This can be used to avoid incremental expansions through calls to {@link #write(int)} when you know how
      * many total bytes are needed.

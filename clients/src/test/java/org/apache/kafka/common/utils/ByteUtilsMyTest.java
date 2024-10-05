@@ -32,7 +32,7 @@ public class ByteUtilsMyTest {
         for (int i = 0; i <= Integer.MAX_VALUE && i >= 0; i+=16) {
             ByteUtils.writeUnsignedVarint(i, buf);
             int size = ByteUtils.sizeOfUnsignedVarint(i);
-            assert buf.limit() == size;
+            assert buf.position() == size;
             assert size >= preSize;
             if(size > preSize){
                 System.out.println(String.format("%d:%d", i-16, preSize));
@@ -61,7 +61,8 @@ public class ByteUtilsMyTest {
         for (int i = 0; i <= Integer.MAX_VALUE && i >= 0; i+=8) {
             ByteUtils.writeVarint(i, buf);
             int size = ByteUtils.sizeOfVarint(i);
-            assert buf.limit() == size;
+            //System.out.println(i+ "," + buf.limit() + "," + size);
+            assert buf.position() == size;
             assert size >= preSize;
             if(size > preSize){
                 System.out.println(String.format("%d:%d", i-8, preSize));

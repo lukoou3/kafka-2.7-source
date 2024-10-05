@@ -14,4 +14,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# 可以看到实际上调用的kafka-run-class.sh
 exec $(dirname $0)/kafka-run-class.sh kafka.tools.DumpLogSegments "$@"

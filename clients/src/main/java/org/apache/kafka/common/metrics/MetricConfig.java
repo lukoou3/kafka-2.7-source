@@ -36,6 +36,7 @@ public class MetricConfig {
         this.quota = null;
         this.samples = 2;
         this.eventWindow = Long.MAX_VALUE;
+        // 每个窗口30s, 总共2(samples)个窗口
         this.timeWindowMs = TimeUnit.MILLISECONDS.convert(30, TimeUnit.SECONDS);
         this.tags = new LinkedHashMap<>();
         this.recordingLevel = Sensor.RecordingLevel.INFO;

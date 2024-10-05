@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import static org.apache.kafka.common.metrics.internals.MetricsUtils.convert;
 
 /**
+ * 给定数量的速率。默认情况下，这是从采样统计中在一组样本上观察到的总数除以样本窗口上经过的时间。然而，可以提供替代的SampledStat实现来记录发生率（例如，在时间间隔上测量的值的计数）或其他这样的值。
  * The rate of the given quantity. By default this is the total observed over a set of samples from a sampled statistic
  * divided by the elapsed time over the sample windows. Alternative {@link SampledStat} implementations can be provided,
  * however, to record the rate of occurrences (e.g. the count of values measured over the time interval) or other such
@@ -61,6 +62,7 @@ public class Rate implements MeasurableStat {
         this.stat.record(config, value, timeMs);
     }
 
+    // 测量此数量并将结果作为双精度返回
     @Override
     public double measure(MetricConfig config, long now) {
         double value = stat.measure(config, now);

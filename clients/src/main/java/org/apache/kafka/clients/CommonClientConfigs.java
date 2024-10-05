@@ -113,6 +113,8 @@ public class CommonClientConfigs {
     public static final Long DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS = 127 * 1000L;
 
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = "connections.max.idle.ms";
+
+    // 在此配置指定的毫秒数之后关闭空闲连接。
     public static final String CONNECTIONS_MAX_IDLE_MS_DOC = "Close idle connections after the number of milliseconds specified by this config.";
 
     public static final String REQUEST_TIMEOUT_MS_CONFIG = "request.timeout.ms";
